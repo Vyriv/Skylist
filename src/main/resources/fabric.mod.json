@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "skylist",
+  "version": "${version}",
+  "name": "Skylist",
+  "description": "Skylist provides the scammer list, scammer UI, themes, and live cosmetic player customizations.",
+  "authors": [
+    "Vyriv"
+  ],
+  "icon": "assets/throwerlist/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.ryan.throwerlist.ThrowerListMod"
+    ]
+  },
+  "mixins": [
+    "throwerlist.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.18.1",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=21",
+    "fabric-api": "*",
+    "fabric-language-kotlin": "*"
+  }
+}

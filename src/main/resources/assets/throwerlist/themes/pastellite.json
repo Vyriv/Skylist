@@ -1,0 +1,10 @@
+{
+  "primaryAccent": "rgba(186, 148, 255, 1)",
+  "hoverAccent": "rgba(206, 176, 255, 1)",
+  "darkAccent": "rgba(132, 96, 204, 1)",
+  "mainBackground": "rgba(18, 14, 28, 1)",
+  "panelBackground": "rgba(60, 40, 90, 0.55)",
+  "secondaryPanel": "rgba(50, 30, 80, 0.45)",
+  "idleBorder": "rgba(186, 148, 255, 0.35)",
+  "lightTextAccent": "rgba(255, 255, 255, 0.95)"
+}

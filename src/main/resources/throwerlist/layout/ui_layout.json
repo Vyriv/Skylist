@@ -1,0 +1,169 @@
+{
+  "mainList": {
+    "frame": {
+      "maxWidth": 492,
+      "dungeonWidth": 420,
+      "horizontalMargin": 18,
+      "top": 18,
+      "bottomMargin": 12,
+      "contentInset": 12
+    },
+    "sidebar": {
+      "handleWidth": 14,
+      "flyoutWidth": 122,
+      "contentGap": 0,
+      "innerPadding": 6,
+      "frameInset": 1,
+      "verticalInset": 0,
+      "toggleSize": 18,
+      "toggleLeftOffset": 7,
+      "toggleTopOffset": 6,
+      "headerTopOffset": 14,
+      "headerButtonGap": 8,
+      "buttonTopOffset": 0,
+      "buttonHeight": 20,
+      "buttonMinWidth": 12
+    },
+    "titleBar": {
+      "height": 28,
+      "controlTopOffset": 5,
+      "buttonHeight": 20,
+      "buttonGap": 4,
+      "creditsButtonWidth": 20,
+      "settingsButtonWidth": 20,
+      "discordButtonWidth": 20,
+      "donationButtonWidth": 20,
+      "trollButtonMinWidth": 72,
+      "trollButtonMaxWidth": 102,
+      "trollButtonLeftOffset": 28,
+      "trollButtonRightPadding": 28
+    },
+    "tabs": {
+      "topSpacing": 18,
+      "height": 20,
+      "gapTotal": 16
+    },
+    "search": {
+      "topSpacing": 10,
+      "height": 20,
+      "countWidth": 106,
+      "countGap": 8
+    },
+    "list": {
+      "topSpacing": 10
+    },
+    "actionStrip": {
+      "height": 40,
+      "bottomGap": 6,
+      "textGap": 10,
+      "textMinWidth": 80,
+      "detailButtons": {
+        "topOffset": 10,
+        "width": 80,
+        "height": 20,
+        "gap": 6
+      }
+    },
+    "footer": {
+      "height": 20,
+      "bottomGap": 8,
+      "buttonGap": 8
+    },
+    "row": {
+      "height": 54,
+      "inset": 4,
+      "sourceBadge": {
+        "padding": 12,
+        "rightInset": 54,
+        "topOffset": 8,
+        "height": 13
+      },
+      "remoteState": {
+        "topOffset": 25,
+        "height": 13
+      },
+      "tagBadge": {
+        "leftOffset": 12,
+        "topOffset": 7,
+        "size": 13
+      },
+      "viewIcon": {
+        "rightInset": 32,
+        "width": 17,
+        "topOffset": 10,
+        "height": 16
+      },
+      "editIcon": {
+        "rightInset": 10,
+        "width": 17,
+        "topOffset": 10,
+        "height": 16
+      }
+    },
+    "tooltip": {
+      "maxWidth": 170
+    },
+    "status": {
+      "height": 10,
+      "bottomGap": 4,
+      "horizontalPadding": 12
+    }
+  },
+  "entryEditor": {
+    "panelWidth": 340,
+    "panelHeight": 180,
+    "titleBarHeight": 22,
+    "contentInset": 16,
+    "primaryFieldWidth": 124,
+    "columnGap": 12,
+    "fieldHeight": 20,
+    "titleTopOffset": 8,
+    "spacing": {
+      "titleToLabels": 20,
+      "labelToField": 12,
+      "sectionGap": 16,
+      "fieldToActions": 28
+    },
+    "actions": {
+      "width": 100,
+      "height": 20
+    },
+    "statusBottomGap": 8
+  },
+  "rendering": {
+    "textFieldInsetX": 6,
+    "textFieldInsetY": 4,
+    "textFieldMinWidth": 24,
+    "textFieldPlaceholderYOffset": 2
+  },
+  "panels": {
+    "credits": {
+      "width": 380,
+      "height": 220
+    },
+    "settings": {
+      "width": 360,
+      "height": 236
+    },
+    "autokickEditor": {
+      "width": 380,
+      "height": 220
+    },
+    "tagPicker": {
+      "width": 372,
+      "height": 236
+    },
+    "shareCode": {
+      "width": 420,
+      "height": 168
+    },
+    "entryProfile": {
+      "width": 496,
+      "height": 336
+    },
+    "scammerSettings": {
+      "width": 420,
+      "height": 352
+    }
+  }
+}

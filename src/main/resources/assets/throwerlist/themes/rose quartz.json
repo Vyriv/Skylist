@@ -1,0 +1,16 @@
+# Skylist theme file.
+# Edit the colors below to change this theme.
+# Supported formats: #RRGGBB, #AARRGGBB, rgba(r, g, b, a).
+# For rgba alpha, use 0.0-1.0 for opacity or 0-255 for direct alpha.
+# The game ignores comment lines that start with #.
+
+{
+  "primaryAccent": "rgba(255, 150, 214, 1)",
+  "hoverAccent": "rgba(255, 182, 226, 1)",
+  "darkAccent": "rgba(186, 88, 148, 1)",
+  "mainBackground": "rgba(24, 12, 22, 1)",
+  "panelBackground": "rgba(90, 42, 78, 0.54)",
+  "secondaryPanel": "rgba(68, 28, 58, 0.42)",
+  "idleBorder": "rgba(255, 170, 222, 0.34)",
+  "lightTextAccent": "rgba(255, 245, 251, 0.96)"
+}
