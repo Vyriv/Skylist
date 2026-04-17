@@ -72,7 +72,7 @@ jobs:
                       type: 2,
                       style: 5,
                       label: "Modrinth Releases",
-                      url: "https://modrinth.com/mod/skylist/versions"
+                      url: "https://modrinth.com/mod/skylist"
                     }
                   ]
                 }
