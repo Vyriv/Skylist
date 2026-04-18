@@ -1,5 +1,3 @@
-SKYLIST (core mod)
-
 # **Skylist**
 
 Skylist is a Fabric mod for Hypixel SkyBlock focused on scam prevention and player safety.
