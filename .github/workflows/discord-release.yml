@@ -23,6 +23,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
+          DISCORD_WEBHOOK=$(printf '%s' "$DISCORD_WEBHOOK" | tr -d '\r\n')
+
+          case "$DISCORD_WEBHOOK" in
+            https://discord.com/api/webhooks/*|https://discordapp.com/api/webhooks/*)
+              ;;
+            *)
+              echo "::error::DISCORD_WEBHOOK is missing or is not a valid Discord webhook URL."
+              exit 1
+              ;;
+          esac
+
           if [ "$EVENT_NAME" = "release" ] && [ -n "$RELEASE_URL" ]; then
             TITLE="${RELEASE_NAME:-$TAG_NAME}"
             URL="$RELEASE_URL"
@@ -43,13 +54,10 @@ jobs:
           fi
 
           payload=$(jq -n \
-            --arg content "@everyone" \
             --arg title "$TITLE" \
             --arg url "$URL" \
             --arg desc "$DESC" \
             '{
-              content: $content,
-              allowed_mentions: { parse: ["everyone"] },
               embeds: [
                 {
                   title: $title,
@@ -79,6 +87,7 @@ jobs:
               ]
             }')
 
-          curl -H "Content-Type: application/json" \
+          curl --fail-with-body --silent --show-error \
+               -H "Content-Type: application/json" \
                -d "$payload" \
-               "$DISCORD_WEBHOOK"
+               "${DISCORD_WEBHOOK}?wait=true&with_components=true"
