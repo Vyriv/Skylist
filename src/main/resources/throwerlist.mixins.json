@@ -16,6 +16,9 @@
     "ScoreboardEntryMixin",
     "SkyHanniAdvancedPlayerListMixin",
     "SkyHanniCustomScoreboardMixin",
+    "TextGuiElementRenderStateMixin",
+    "TextHandlerMixin",
+    "TextRendererMixin",
     "TeamMixin"
   ],
   "injectors": {
