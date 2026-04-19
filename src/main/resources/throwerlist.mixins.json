@@ -13,8 +13,10 @@
     "PlayerEntityRendererMixin",
     "PlayerListEntryMixin",
     "PlayerListHudMixin",
+    "ScoreboardEntryMixin",
     "SkyHanniAdvancedPlayerListMixin",
-    "SkyHanniCustomScoreboardMixin"
+    "SkyHanniCustomScoreboardMixin",
+    "TeamMixin"
   ],
   "injectors": {
     "defaultRequire": 1
