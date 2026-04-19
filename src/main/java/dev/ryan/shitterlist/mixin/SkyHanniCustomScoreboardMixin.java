@@ -15,6 +15,9 @@ import java.util.Collection;
 @Pseudo
 @Mixin(targets = "at.hannibal2.skyhanni.features.gui.customscoreboard.CustomScoreboard", remap = false)
 public abstract class SkyHanniCustomScoreboardMixin {
+    private static final String STRING_RENDERABLE_CLASS = "at.hannibal2.skyhanni.utils.renderables.primitives.StringRenderable";
+    private static final String TEXT_RENDERABLE_CLASS = "at.hannibal2.skyhanni.utils.renderables.primitives.TextRenderable";
+
     @Redirect(
         method = "createRenderable(Ljava/util/List;)Lat/hannibal2/skyhanni/utils/renderables/container/VerticalContainerRenderable;",
         at = @At(
@@ -30,14 +33,33 @@ public abstract class SkyHanniCustomScoreboardMixin {
 
     private static Object createStyledRenderable(Object renderable) {
         try {
-            if (renderable == null || !renderable.getClass().getName().equals("at.hannibal2.skyhanni.utils.renderables.primitives.StringRenderable")) {
+            if (renderable == null) {
+                return null;
+            }
+
+            String renderableClassName = renderable.getClass().getName();
+            if (!STRING_RENDERABLE_CLASS.equals(renderableClassName) && !TEXT_RENDERABLE_CLASS.equals(renderableClassName)) {
                 return null;
             }
 
             Method getText = renderable.getClass().getMethod("getText");
-            String text = (String) getText.invoke(renderable);
-            if (!NameStyler.INSTANCE.containsStyledTargetName(text)) {
+            Object rawText = getText.invoke(renderable);
+            if (!(rawText instanceof String) && !(rawText instanceof Text)) {
                 return null;
+            }
+
+            Text styled;
+            if (rawText instanceof String text) {
+                if (!NameStyler.INSTANCE.containsStyledScoreboardTargetName(text)) {
+                    return null;
+                }
+                styled = NameStyler.INSTANCE.applyScoreboardDecorations(text);
+            } else {
+                Text text = (Text) rawText;
+                if (!NameStyler.INSTANCE.containsStyledScoreboardTargetName(text.getString())) {
+                    return null;
+                }
+                styled = NameStyler.INSTANCE.applyScoreboardDecorations(text);
             }
 
             Method getScale = renderable.getClass().getMethod("getScale");
@@ -50,13 +72,27 @@ public abstract class SkyHanniCustomScoreboardMixin {
             Object horizontalAlign = getHorizontalAlign.invoke(renderable);
             Object verticalAlign = getVerticalAlign.invoke(renderable);
 
-            Text styled = NameStyler.INSTANCE.applyNameplateDecorations(text);
-
-            Class<?> horizontalClass = horizontalAlign.getClass();
-            Class<?> verticalClass = verticalAlign.getClass();
-            Class<?> textRenderableClass = Class.forName("at.hannibal2.skyhanni.utils.renderables.primitives.TextRenderable");
-            Constructor<?> constructor = textRenderableClass.getConstructor(Text.class, double.class, Color.class, horizontalClass, verticalClass);
-            return constructor.newInstance(styled, scale, color, horizontalAlign, verticalAlign);
+            Class<?> textRenderableClass = Class.forName(TEXT_RENDERABLE_CLASS);
+            for (Constructor<?> constructor : textRenderableClass.getConstructors()) {
+                Class<?>[] parameterTypes = constructor.getParameterTypes();
+                if (parameterTypes.length != 5) {
+                    continue;
+                }
+                if (!parameterTypes[0].isInstance(styled)) {
+                    continue;
+                }
+                if (!(parameterTypes[1] == double.class || parameterTypes[1] == Double.class)) {
+                    continue;
+                }
+                if (!parameterTypes[2].isInstance(color)) {
+                    continue;
+                }
+                if (!parameterTypes[3].isInstance(horizontalAlign) || !parameterTypes[4].isInstance(verticalAlign)) {
+                    continue;
+                }
+                return constructor.newInstance(styled, scale, color, horizontalAlign, verticalAlign);
+            }
+            return null;
         } catch (ReflectiveOperationException ignored) {
             return null;
         }

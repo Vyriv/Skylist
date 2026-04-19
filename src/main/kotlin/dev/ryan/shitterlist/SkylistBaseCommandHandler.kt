@@ -69,6 +69,7 @@ object SkylistBaseCommandHandler {
                 }
                 Command.SINGLE_SUCCESS
             }
+                .then(literal("update").executes(::installLatestUpdate))
                 .then(literal("dev")
                     .then(literal("assumepartyleader")
                         .then(literal("true").executes { updateAssumePartyLeader(it, true) })
@@ -112,6 +113,7 @@ object SkylistBaseCommandHandler {
         source.sendFeedback(helpLine("gui", "[target]"))
         source.sendFeedback(helpLine("list", "scammers"))
         source.sendFeedback(helpLine("check", "<username/uuid/discordId>"))
+        source.sendFeedback(helpLine("settings", "update"))
         source.sendFeedback(helpLine("settings", "dev", "assumepartyleader", "true/false"))
         source.sendFeedback(helpLine("settings", "dev", "versioninfo"))
         source.sendFeedback(helpLine("settings", "dev", "sethypixelapikey", "<key>"))
@@ -135,13 +137,27 @@ object SkylistBaseCommandHandler {
 
     private fun printVersionInfo(context: CommandContext<FabricClientCommandSource>): Int {
         val currentVersion = RuntimeVersion.currentVersion()
+        val latestKnownVersion = GitHubUpdateChecker.latestKnownVersionForCurrentMinecraft()
         val jarPath = RuntimeVersion.currentJarPath()
         context.source.sendFeedback(
             tlMessage(
                 Text.literal("Installed version: ").formatted(Formatting.GREEN)
-                    .append(Text.literal(currentVersion).formatted(Formatting.YELLOW))
+                    .append(
+                        Text.literal(currentVersion)
+                            .formatted(Formatting.YELLOW)
+                            .styled {
+                                it.withClickEvent(ClickEvent.OpenUrl(URI.create(ThrowerListLinks.githubReleasesUrl)))
+                                    .withHoverEvent(HoverEvent.ShowText(Text.literal("Open Skylist GitHub releases")))
+                            },
+                    )
                     .append(Text.literal(" | Minecraft: ").formatted(Formatting.GREEN))
                     .append(Text.literal(RuntimeVersion.minecraftVersion().ifBlank { "unknown" }).formatted(Formatting.AQUA))
+                    .append(
+                        latestKnownVersion?.let {
+                            Text.literal(" | Latest known: ").formatted(Formatting.GREEN)
+                                .append(Text.literal(it).formatted(Formatting.AQUA))
+                        } ?: Text.empty(),
+                    )
                     .append(
                         jarPath?.let {
                             Text.literal(" | Jar: ").formatted(Formatting.GREEN)
@@ -150,6 +166,11 @@ object SkylistBaseCommandHandler {
                     ),
             ),
         )
+        return Command.SINGLE_SUCCESS
+    }
+
+    private fun installLatestUpdate(context: CommandContext<FabricClientCommandSource>): Int {
+        GitHubUpdateChecker.installLatestUpdate(context.source)
         return Command.SINGLE_SUCCESS
     }
 
@@ -342,6 +363,7 @@ object SkylistBaseCommandHandler {
                     }
                     val color = when {
                         segment.equals("assumepartyleader", ignoreCase = true) -> Formatting.YELLOW
+                        segment.equals("update", ignoreCase = true) -> Formatting.GREEN
                         segment.equals("versioninfo", ignoreCase = true) -> Formatting.GOLD
                         segment.equals("sethypixelapikey", ignoreCase = true) -> Formatting.GOLD
                         segment.equals("getuuid", ignoreCase = true) -> Formatting.AQUA

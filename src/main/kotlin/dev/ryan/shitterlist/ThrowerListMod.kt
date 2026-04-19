@@ -21,6 +21,7 @@ class ThrowerListMod : ClientModInitializer {
 
         ScammerListManager.start()
         ScammerCheckService.start()
+        GitHubUpdateChecker.register()
 
         listener = PartyListener(client)
         listener.register()
