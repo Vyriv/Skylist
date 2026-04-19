@@ -15,6 +15,7 @@ import java.util.Collection;
 @Pseudo
 @Mixin(targets = "at.hannibal2.skyhanni.features.gui.customscoreboard.CustomScoreboard", remap = false)
 public abstract class SkyHanniCustomScoreboardMixin {
+    private static final String SKYHANNI_PRIMITIVES_PACKAGE = "at.hannibal2.skyhanni.utils.renderables.primitives.";
     private static final String STRING_RENDERABLE_CLASS = "at.hannibal2.skyhanni.utils.renderables.primitives.StringRenderable";
     private static final String TEXT_RENDERABLE_CLASS = "at.hannibal2.skyhanni.utils.renderables.primitives.TextRenderable";
 
@@ -37,8 +38,7 @@ public abstract class SkyHanniCustomScoreboardMixin {
                 return null;
             }
 
-            String renderableClassName = renderable.getClass().getName();
-            if (!STRING_RENDERABLE_CLASS.equals(renderableClassName) && !TEXT_RENDERABLE_CLASS.equals(renderableClassName)) {
+            if (!isSupportedSkyHanniRenderable(renderable.getClass())) {
                 return null;
             }
 
@@ -95,6 +95,27 @@ public abstract class SkyHanniCustomScoreboardMixin {
             return null;
         } catch (ReflectiveOperationException ignored) {
             return null;
+        }
+    }
+
+    private static boolean isSupportedSkyHanniRenderable(Class<?> renderableClass) {
+        String className = renderableClass.getName();
+        if (STRING_RENDERABLE_CLASS.equals(className) || TEXT_RENDERABLE_CLASS.equals(className)) {
+            return true;
+        }
+        if (!className.startsWith(SKYHANNI_PRIMITIVES_PACKAGE)) {
+            return false;
+        }
+
+        try {
+            renderableClass.getMethod("getText");
+            renderableClass.getMethod("getScale");
+            renderableClass.getMethod("getColor");
+            renderableClass.getMethod("getHorizontalAlign");
+            renderableClass.getMethod("getVerticalAlign");
+            return true;
+        } catch (NoSuchMethodException ignored) {
+            return false;
         }
     }
 }

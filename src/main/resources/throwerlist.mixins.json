@@ -8,10 +8,12 @@
     "EntityMixin",
     "LivingEntityRenderStateMixin",
     "EntityRendererMixin",
+    "InGameHudMixin",
     "LivingEntityRendererMixin",
     "PlayerEntityRendererMixin",
     "PlayerListEntryMixin",
     "PlayerListHudMixin",
+    "SkyHanniAdvancedPlayerListMixin",
     "SkyHanniCustomScoreboardMixin"
   ],
   "injectors": {
