@@ -9,6 +9,7 @@ import net.minecraft.text.Text;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.lang.reflect.Constructor;
@@ -50,5 +51,21 @@ public abstract class InGameHudMixin {
             cir.setReturnValue(constructor.newInstance(styledName, score, scoreWidth));
         } catch (ReflectiveOperationException ignored) {
         }
+    }
+
+    @ModifyArg(
+        method = "renderScoreboardSidebar(Lnet/minecraft/client/gui/DrawContext;Lnet/minecraft/scoreboard/ScoreboardObjective;)V",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/DrawContext;drawText(Lnet/minecraft/client/font/TextRenderer;Lnet/minecraft/text/Text;IIIZ)V"
+        ),
+        index = 1
+    )
+    private Text throwerlist$decorateRenderedSidebarText(Text text) {
+        if (text == null || !NameStyler.INSTANCE.containsStyledScoreboardTargetName(text.getString())) {
+            return text;
+        }
+
+        return NameStyler.INSTANCE.applyScoreboardDecorations(text);
     }
 }
