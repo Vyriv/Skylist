@@ -50,6 +50,11 @@ jobs:
             DESC=$(echo "$RELEASE_JSON" | jq -r '.body // "No description provided."')
           fi
 
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "::error::Could not determine release URL."
+            exit 1
+          fi
+
           if [ ${#DESC} -gt 4000 ]; then
             DESC="${DESC:0:4000}..."
           fi
@@ -65,10 +70,13 @@ jobs:
             --arg url "$URL" \
             --arg desc "$DESC" \
             --arg githubReleasesUrl "https://github.com/$REPO/releases/latest" \
+            --arg modrinthReleasesUrl "https://modrinth.com/mod/skylist/versions" \
+            --arg releaseRoleId "$RELEASE_ROLE_ID" \
             '{
               content: $content,
               allowed_mentions: {
-                parse: ["roles"]
+                parse: [],
+                roles: [$releaseRoleId]
               },
               embeds: [
                 {
@@ -92,7 +100,7 @@ jobs:
                       type: 2,
                       style: 5,
                       label: "Modrinth Releases",
-                      url: "https://modrinth.com/mod/skylist"
+                      url: $modrinthReleasesUrl
                     }
                   ]
                 }
@@ -100,6 +108,6 @@ jobs:
             }')
 
           curl --fail-with-body --silent --show-error \
-               -H "Content-Type: application/json" \
-               -d "$payload" \
-               "${DISCORD_WEBHOOK}?wait=true&with_components=true"
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "${DISCORD_WEBHOOK}?wait=true&with_components=true"
