@@ -25,10 +25,14 @@ public abstract class PlayerListEntryMixin {
         if (current == null) {
             return;
         }
-        if (NameStyler.INSTANCE.hasStyledProfile(this.profile)) {
-            current = NameStyler.INSTANCE.applyNameplateDecorations(current);
+        if (!NameStyler.INSTANCE.hasStyledProfile(this.profile)) {
+            return;
         }
-        cir.setReturnValue(current);
+
+        Text styled = NameStyler.INSTANCE.applyNameplateDecorations(current);
+        if (styled != current) {
+            cir.setReturnValue(styled);
+        }
     }
 
     @Inject(method = "setDisplayName", at = @At("HEAD"), cancellable = true)
@@ -51,10 +55,9 @@ public abstract class PlayerListEntryMixin {
 
     @Inject(method = "getSkinTextures", at = @At("RETURN"), cancellable = true)
     private void throwerlist$applyCustomCape(CallbackInfoReturnable<SkinTextures> cir) {
-        if (!NameStyler.INSTANCE.isTargetProfile(this.profile)) {
-            return;
+        SkinTextures styled = OwnerCape.INSTANCE.applyCustomCape(this.profile, cir.getReturnValue());
+        if (styled != cir.getReturnValue()) {
+            cir.setReturnValue(styled);
         }
-
-        cir.setReturnValue(OwnerCape.INSTANCE.applyCustomCape(this.profile, cir.getReturnValue()));
     }
 }

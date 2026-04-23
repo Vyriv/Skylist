@@ -17,7 +17,6 @@
     "SkyHanniAdvancedPlayerListMixin",
     "SkyHanniCustomScoreboardMixin",
     "TextGuiElementRenderStateMixin",
-    "TextHandlerMixin",
     "TextRendererMixin",
     "TeamMixin"
   ],

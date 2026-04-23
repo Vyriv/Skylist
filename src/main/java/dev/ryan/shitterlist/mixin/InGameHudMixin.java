@@ -14,9 +14,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @Mixin(InGameHud.class)
 public abstract class InGameHudMixin {
+    private static final ConcurrentMap<Class<?>, Optional<SidebarEntryAccess>> throwerlist$sidebarEntryAccessors = new ConcurrentHashMap<>();
+
     @Inject(
         method = "method_55439(Lnet/minecraft/scoreboard/Scoreboard;Lnet/minecraft/scoreboard/number/NumberFormat;Lnet/minecraft/scoreboard/ScoreboardEntry;)Lnet/minecraft/client/gui/hud/InGameHud$SidebarEntry;",
         at = @At("RETURN"),
@@ -34,21 +39,24 @@ public abstract class InGameHudMixin {
         }
 
         try {
-            Method nameMethod = sidebarEntry.getClass().getMethod("name");
-            Text currentName = (Text) nameMethod.invoke(sidebarEntry);
-            if (currentName == null || !NameStyler.INSTANCE.containsStyledScoreboardTargetName(currentName.getString())) {
+            SidebarEntryAccess access = throwerlist$sidebarEntryAccess(sidebarEntry);
+            if (access == null) {
+                return;
+            }
+
+            Text currentName = (Text) access.nameMethod.invoke(sidebarEntry);
+            if (currentName == null) {
                 return;
             }
 
             Text styledName = NameStyler.INSTANCE.applyScoreboardDecorations(currentName);
-            Method scoreMethod = sidebarEntry.getClass().getMethod("score");
-            Method scoreWidthMethod = sidebarEntry.getClass().getMethod("scoreWidth");
-            Text score = (Text) scoreMethod.invoke(sidebarEntry);
-            int scoreWidth = (int) scoreWidthMethod.invoke(sidebarEntry);
+            if (styledName == currentName) {
+                return;
+            }
+            Text score = (Text) access.scoreMethod.invoke(sidebarEntry);
+            int scoreWidth = (int) access.scoreWidthMethod.invoke(sidebarEntry);
 
-            Constructor<?> constructor = sidebarEntry.getClass().getDeclaredConstructor(Text.class, Text.class, int.class);
-            constructor.setAccessible(true);
-            cir.setReturnValue(constructor.newInstance(styledName, score, scoreWidth));
+            cir.setReturnValue(access.constructor.newInstance(styledName, score, scoreWidth));
         } catch (ReflectiveOperationException ignored) {
         }
     }
@@ -62,10 +70,37 @@ public abstract class InGameHudMixin {
         index = 1
     )
     private Text throwerlist$decorateRenderedSidebarText(Text text) {
-        if (text == null || !NameStyler.INSTANCE.containsStyledScoreboardTargetName(text.getString())) {
+        if (text == null) {
             return text;
         }
 
-        return NameStyler.INSTANCE.applyScoreboardDecorations(text);
+        Text styled = NameStyler.INSTANCE.applyScoreboardDecorations(text);
+        return styled != text ? styled : text;
+    }
+
+    private static SidebarEntryAccess throwerlist$sidebarEntryAccess(Object sidebarEntry) {
+        return throwerlist$sidebarEntryAccessors.computeIfAbsent(sidebarEntry.getClass(), InGameHudMixin::throwerlist$createSidebarEntryAccess)
+            .orElse(null);
+    }
+
+    private static Optional<SidebarEntryAccess> throwerlist$createSidebarEntryAccess(Class<?> sidebarEntryClass) {
+        try {
+            Method nameMethod = sidebarEntryClass.getMethod("name");
+            Method scoreMethod = sidebarEntryClass.getMethod("score");
+            Method scoreWidthMethod = sidebarEntryClass.getMethod("scoreWidth");
+            Constructor<?> constructor = sidebarEntryClass.getDeclaredConstructor(Text.class, Text.class, int.class);
+            constructor.setAccessible(true);
+            return Optional.of(new SidebarEntryAccess(nameMethod, scoreMethod, scoreWidthMethod, constructor));
+        } catch (ReflectiveOperationException ignored) {
+            return Optional.empty();
+        }
+    }
+
+    private record SidebarEntryAccess(
+        Method nameMethod,
+        Method scoreMethod,
+        Method scoreWidthMethod,
+        Constructor<?> constructor
+    ) {
     }
 }

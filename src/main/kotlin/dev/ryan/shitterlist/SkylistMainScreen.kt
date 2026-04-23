@@ -9,6 +9,7 @@ import net.minecraft.text.Text
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.CompletableFuture
 
 class SkylistMainScreen(
     initialSearch: String = "",
@@ -110,17 +111,27 @@ class SkylistMainScreen(
 
         refreshButton = themedButton("Refresh", layout.refreshX, layout.buttonTop, layout.secondaryWidth) {
             refreshing = true
-            statusMessage = "Refreshing scammer cache..."
+            statusMessage = "Refreshing scammer cache and cosmetics..."
             statusColor = 0xFF7FD6FF.toInt()
-            ScammerListManager.refreshAsync().whenComplete { _, throwable ->
+            val scammerRefresh = ScammerListManager.refreshAsync()
+            val cosmeticsRefresh = ContentManager.refreshRemotePeopleNow(logPrefix = "manual-ui")
+
+            CompletableFuture.allOf(scammerRefresh, cosmeticsRefresh).whenComplete { _, throwable ->
                 client?.execute {
                     refreshing = false
                     if (throwable != null) {
-                        statusMessage = ScammerListManager.lastFailureReason() ?: "Refresh failed."
+                        statusMessage = when {
+                            scammerRefresh.isCompletedExceptionally && cosmeticsRefresh.isCompletedExceptionally ->
+                                "Scammer cache and cosmetics refresh failed."
+                            scammerRefresh.isCompletedExceptionally ->
+                                ScammerListManager.lastFailureReason() ?: "Scammer cache refresh failed."
+                            else ->
+                                "Cosmetics refresh failed."
+                        }
                         statusColor = 0xFFFF7777.toInt()
                     } else {
                         refreshEntries(keepSelection = true)
-                        statusMessage = "Scammer cache refreshed."
+                        statusMessage = "Scammer cache and cosmetics refreshed."
                         statusColor = 0xFF88FF88.toInt()
                     }
                 }

@@ -18,10 +18,14 @@ public abstract class PlayerListHudMixin {
         if (current == null) {
             return;
         }
-        if (NameStyler.INSTANCE.hasStyledProfile(entry.getProfile())) {
-            current = NameStyler.INSTANCE.applyNameplateDecorations(current);
+        if (!NameStyler.INSTANCE.hasStyledProfile(entry.getProfile())) {
+            return;
         }
-        cir.setReturnValue(current);
+
+        Text styled = NameStyler.INSTANCE.applyNameplateDecorations(current);
+        if (styled != current) {
+            cir.setReturnValue(styled);
+        }
     }
 
     @ModifyArg(
@@ -37,10 +41,7 @@ public abstract class PlayerListHudMixin {
             return text;
         }
 
-        Text current = text;
-        if (NameStyler.INSTANCE.containsStyledTargetName(current.getString())) {
-            current = NameStyler.INSTANCE.applyNameplateDecorations(current);
-        }
-        return current;
+        Text styled = NameStyler.INSTANCE.applyNameplateDecorations(text);
+        return styled != text ? styled : text;
     }
 }

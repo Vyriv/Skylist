@@ -15,11 +15,14 @@ public abstract class TeamMixin {
     @Inject(method = "decorateName(Lnet/minecraft/text/Text;)Lnet/minecraft/text/MutableText;", at = @At("RETURN"), cancellable = true)
     private void throwerlist$decorateTeamName(Text name, CallbackInfoReturnable<MutableText> cir) {
         MutableText current = cir.getReturnValue();
-        if (current == null || !NameStyler.INSTANCE.containsStyledScoreboardTargetName(current.getString())) {
+        if (current == null) {
             return;
         }
 
-        cir.setReturnValue(NameStyler.INSTANCE.applyScoreboardDecorations(current).copy());
+        Text styled = NameStyler.INSTANCE.applyScoreboardDecorations(current);
+        if (styled != current) {
+            cir.setReturnValue((MutableText) styled);
+        }
     }
 
     @Inject(method = "decorateName(Lnet/minecraft/scoreboard/AbstractTeam;Lnet/minecraft/text/Text;)Lnet/minecraft/text/MutableText;", at = @At("RETURN"), cancellable = true)
@@ -29,10 +32,13 @@ public abstract class TeamMixin {
         CallbackInfoReturnable<MutableText> cir
     ) {
         MutableText current = cir.getReturnValue();
-        if (current == null || !NameStyler.INSTANCE.containsStyledScoreboardTargetName(current.getString())) {
+        if (current == null) {
             return;
         }
 
-        cir.setReturnValue(NameStyler.INSTANCE.applyScoreboardDecorations(current).copy());
+        Text styled = NameStyler.INSTANCE.applyScoreboardDecorations(current);
+        if (styled != current) {
+            cir.setReturnValue((MutableText) styled);
+        }
     }
 }

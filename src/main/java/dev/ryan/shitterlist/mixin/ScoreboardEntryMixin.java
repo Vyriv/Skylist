@@ -13,10 +13,13 @@ public abstract class ScoreboardEntryMixin {
     @Inject(method = "name", at = @At("RETURN"), cancellable = true)
     private void throwerlist$decorateScoreboardEntryName(CallbackInfoReturnable<Text> cir) {
         Text current = cir.getReturnValue();
-        if (current == null || !NameStyler.INSTANCE.containsStyledScoreboardTargetName(current.getString())) {
+        if (current == null) {
             return;
         }
 
-        cir.setReturnValue(NameStyler.INSTANCE.applyScoreboardDecorations(current));
+        Text styled = NameStyler.INSTANCE.applyScoreboardDecorations(current);
+        if (styled != current) {
+            cir.setReturnValue(styled);
+        }
     }
 }

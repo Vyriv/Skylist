@@ -2,13 +2,11 @@ package dev.ryan.throwerlist.mixin;
 
 import dev.ryan.throwerlist.CustomScaleState;
 import dev.ryan.throwerlist.PlayerCustomizationRegistry;
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.entity.LivingEntityRenderer;
 import net.minecraft.client.render.entity.state.LivingEntityRenderState;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.Formatting;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -24,8 +22,12 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, S extend
 
         CustomScaleState customScaleState = (CustomScaleState) state;
         customScaleState.throwerlist$clearCustomScale();
+        if (!PlayerCustomizationRegistry.INSTANCE.hasScaleCustomizations()) {
+            return;
+        }
 
-        PlayerCustomizationRegistry.PlayerCustomization customization = throwerlist$findCustomization(entity);
+        PlayerCustomizationRegistry.PlayerCustomization customization =
+            PlayerCustomizationRegistry.INSTANCE.findWithScale(((PlayerEntity) entity).getGameProfile());
         if (customization == null) {
             return;
         }
@@ -56,33 +58,5 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, S extend
         }
 
         matrices.scale(scaleX / baseScale, scaleY / baseScale, scaleZ / baseScale);
-    }
-
-    private PlayerCustomizationRegistry.PlayerCustomization throwerlist$findCustomization(T entity) {
-        String displayName = entity.getName().getString();
-        String cleanName = Formatting.strip(displayName);
-        PlayerCustomizationRegistry.PlayerCustomization customization = PlayerCustomizationRegistry.INSTANCE.findByName(cleanName);
-        if (customization != null) {
-            return customization;
-        }
-
-        customization = PlayerCustomizationRegistry.INSTANCE.findByName(displayName);
-        if (customization != null) {
-            return customization;
-        }
-
-        PlayerEntity localPlayer = MinecraftClient.getInstance().player;
-        if (localPlayer == null) {
-            return null;
-        }
-
-        String localName = localPlayer.getName().getString();
-        if (!displayName.equals(localName) && !displayName.isEmpty()) {
-            return null;
-        }
-
-        String localCleanName = Formatting.strip(localName);
-        PlayerCustomizationRegistry.PlayerCustomization localCustomization = PlayerCustomizationRegistry.INSTANCE.findByName(localCleanName);
-        return localCustomization != null ? localCustomization : PlayerCustomizationRegistry.INSTANCE.findByName(localName);
     }
 }

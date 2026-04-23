@@ -48,10 +48,11 @@ public abstract class SkyHanniAdvancedPlayerListMixin {
     }
 
     private static Text styleIfNeeded(Text text) {
-        if (text == null || !NameStyler.INSTANCE.containsStyledTargetName(text.getString())) {
+        if (text == null) {
             return text;
         }
 
-        return NameStyler.INSTANCE.applyNameplateDecorations(text);
+        Text styled = NameStyler.INSTANCE.applyNameplateDecorations(text);
+        return styled != text ? styled : text;
     }
 }

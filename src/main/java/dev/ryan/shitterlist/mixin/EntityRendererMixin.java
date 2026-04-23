@@ -15,10 +15,13 @@ public abstract class EntityRendererMixin<T extends Entity, S extends EntityRend
     @Inject(method = "updateRenderState", at = @At("RETURN"))
     private void throwerlist$styleLabelState(T entity, S state, float tickDelta, CallbackInfo ci) {
         Text current = state.displayName;
-        if (current == null || !NameStyler.INSTANCE.containsStyledTargetName(current.getString())) {
+        if (current == null) {
             return;
         }
 
-        state.displayName = NameStyler.INSTANCE.applyNameplateDecorations(current);
+        Text styled = NameStyler.INSTANCE.applyNameplateDecorations(current);
+        if (styled != current) {
+            state.displayName = styled;
+        }
     }
 }

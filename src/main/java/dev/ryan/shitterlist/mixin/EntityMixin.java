@@ -12,16 +12,22 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class EntityMixin {
     @Inject(method = "getName", at = @At("RETURN"), cancellable = true)
     private void throwerlist$styleName(CallbackInfoReturnable<Text> cir) {
-        if (NameStyler.INSTANCE.hasExplicitNameColors(cir.getReturnValue().getString())) {
-            cir.setReturnValue(NameStyler.INSTANCE.styledSelfName(cir.getReturnValue().getString()));
+        Text styled = NameStyler.INSTANCE.styleEntityName(cir.getReturnValue());
+        if (styled != cir.getReturnValue()) {
+            cir.setReturnValue(styled);
         }
     }
 
     @Inject(method = "getDisplayName", at = @At("RETURN"), cancellable = true)
     private void throwerlist$styleDisplayName(CallbackInfoReturnable<Text> cir) {
         Text current = cir.getReturnValue();
-        if (current != null && NameStyler.INSTANCE.containsStyledTargetName(current.getString())) {
-            cir.setReturnValue(NameStyler.INSTANCE.applyNameplateDecorations(current));
+        if (current == null) {
+            return;
+        }
+
+        Text styled = NameStyler.INSTANCE.applyNameplateDecorations(current);
+        if (styled != current) {
+            cir.setReturnValue(styled);
         }
     }
 }

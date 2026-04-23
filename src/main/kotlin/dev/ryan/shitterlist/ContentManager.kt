@@ -9,9 +9,13 @@ import java.net.http.HttpResponse
 import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 
 object ContentManager {
     private val gson = GsonBuilder().create()
+    private const val playerWidthBlocks = 0.6f
+    private const val playerHeightBlocks = 1.8f
+    private const val playerDepthBlocks = 0.6f
 
     private const val reasonsResourcePath = "throwerlist/content/reasons.json"
     private const val uiTextResourcePath = "throwerlist/content/ui_text.json"
@@ -37,8 +41,9 @@ object ContentManager {
         betaTesterEntry("JuniorWasTaken", "3126eab6-c532-486c-ba8a-4ef6f84f633c", "Junior"),
         betaTesterEntry("BulkyHyperion", "b1a1f254-d07a-4e8f-be27-56df51776e58", "Bulky"),
         betaTesterEntry("fifiboyuu", "1cd842b5-b804-46db-9728-2ce54f787f78", "fifi"),
-        betaTesterEntry("Outfixes", "e0b84780-1553-40d6-a9ed-c43a510a5340", "Outfixed", aliases = listOf("Outfixed")),
+        betaTesterEntry("Outfixes", "e0b84780-1553-40d6-a9ed-c43a510a5340", "Outfixed"),
     )
+    private val syncedCreditUsernames = ConcurrentHashMap<String, String>()
 
     @Volatile
     private var peopleContent = PeopleContent()
@@ -58,6 +63,7 @@ object ContentManager {
     fun load() {
         peopleContent = PeopleContent()
         remotePeopleContent = PeopleContent()
+        syncHardcodedCreditUsernames()
         reasonContent = loadResource(
             resourcePath = reasonsResourcePath,
             clazz = ReasonContent::class.java,
@@ -134,6 +140,12 @@ object ContentManager {
     private fun loadPlayerCustomization(entry: PlayerCustomizationFile): LoadedPlayerCustomization? {
         val nameStyle = loadNameStyle(entry.style)
         val badge = entry.badge?.let(::loadBadge)
+        val resolvedScale = entry.scale
+        val resolvedWidthBlocks = entry.widthBlocks
+        val resolvedDepthBlocks = entry.depthBlocks ?: resolvedWidthBlocks
+        val resolvedScaleX = entry.scaleX ?: resolvedWidthBlocks?.div(playerWidthBlocks)
+        val resolvedScaleY = entry.scaleY ?: entry.heightBlocks?.div(playerHeightBlocks)
+        val resolvedScaleZ = entry.scaleZ ?: resolvedDepthBlocks?.div(playerDepthBlocks)
         return LoadedPlayerCustomization(
             username = entry.username,
             uuid = entry.uuid?.trim()?.takeIf { it.isNotEmpty() },
@@ -142,21 +154,30 @@ object ContentManager {
             badge = badge,
             capeResourcePath = entry.capeResourcePath?.trim()?.takeIf { it.isNotEmpty() },
             capeUrl = entry.capeUrl?.trim()?.takeIf { it.isNotEmpty() },
-            scale = entry.scale,
-            scaleX = entry.scaleX,
-            scaleY = entry.scaleY,
-            scaleZ = entry.scaleZ,
+            scale = resolvedScale,
+            scaleX = resolvedScaleX,
+            scaleY = resolvedScaleY,
+            scaleZ = resolvedScaleZ,
         )
     }
 
     private fun loadCreditEntry(entry: PlayerCustomizationFile): LoadedCreditEntry? {
         val role = entry.creditRole?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val resolvedUsername = resolvedCreditUsername(entry)
         return LoadedCreditEntry(
-            username = entry.username,
-            label = entry.creditLabel?.trim()?.takeIf { it.isNotEmpty() } ?: entry.username,
+            username = resolvedUsername,
+            label = entry.creditLabel?.trim()?.takeIf { it.isNotEmpty() } ?: resolvedCreditUsername(entry),
             role = role,
         )
     }
+
+    private fun resolvedCreditUsername(entry: PlayerCustomizationFile): String =
+        entry.uuid
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { syncedCreditUsernames[it.lowercase()] }
+            ?.takeIf { it.isNotBlank() }
+            ?: entry.username
 
     private fun loadNameStyle(style: NameStyleFile?): LoadedNameStyle? {
         if (style == null) {
@@ -231,15 +252,30 @@ object ContentManager {
         val orderedKeys = linkedSetOf<String>()
         val mergedEntries = linkedMapOf<String, PlayerCustomizationFile>()
 
-        listOf(remotePeopleContent.players, remotePeopleContent.awesomePeople).forEach { section ->
+        listOf(hardcodedBetaTesterEntries, remotePeopleContent.players, remotePeopleContent.awesomePeople).forEach { section ->
             section.forEach { entry ->
-                val key = entry.identityKey() ?: return@forEach
+                val key = existingCustomizationKey(entry, mergedEntries) ?: entry.identityKey() ?: return@forEach
                 orderedKeys.add(key)
                 mergedEntries[key] = mergedEntries[key]?.mergedWith(entry) ?: entry
             }
         }
 
         return orderedKeys.mapNotNull(mergedEntries::get)
+    }
+
+    private fun existingCustomizationKey(
+        entry: PlayerCustomizationFile,
+        mergedEntries: Map<String, PlayerCustomizationFile>,
+    ): String? {
+        val entryUuid = entry.uuid?.trim()?.takeIf { it.isNotEmpty() }
+        val entryUsername = entry.username.trim().takeIf { it.isNotEmpty() }
+
+        return mergedEntries.entries.firstOrNull { (_, existing) ->
+            val existingUuid = existing.uuid?.trim()?.takeIf { it.isNotEmpty() }
+            val existingUsername = existing.username.trim().takeIf { it.isNotEmpty() }
+            (entryUuid != null && existingUuid != null && entryUuid.equals(existingUuid, ignoreCase = true)) ||
+                (entryUsername != null && existingUsername != null && entryUsername.equals(existingUsername, ignoreCase = true))
+        }?.key
     }
 
     private fun PlayerCustomizationFile.mergedWith(overlay: PlayerCustomizationFile): PlayerCustomizationFile {
@@ -266,6 +302,9 @@ object ContentManager {
             scaleX = overlay.scaleX ?: scaleX,
             scaleY = overlay.scaleY ?: scaleY,
             scaleZ = overlay.scaleZ ?: scaleZ,
+            widthBlocks = overlay.widthBlocks ?: widthBlocks,
+            heightBlocks = overlay.heightBlocks ?: heightBlocks,
+            depthBlocks = overlay.depthBlocks ?: depthBlocks,
         )
     }
 
@@ -396,6 +435,9 @@ object ContentManager {
         var scaleX: Float? = null,
         var scaleY: Float? = null,
         var scaleZ: Float? = null,
+        var widthBlocks: Float? = null,
+        var heightBlocks: Float? = null,
+        var depthBlocks: Float? = null,
     )
 
     data class NameStyleFile(
@@ -451,15 +493,24 @@ object ContentManager {
         val updatedAt: String? = null,
     )
 
+    private fun syncHardcodedCreditUsernames() {
+        hardcodedBetaTesterEntries.forEach { entry ->
+            val uuid = entry.uuid?.trim()?.takeIf { it.isNotEmpty() } ?: return@forEach
+            UsernameResolver.resolveUuid(uuid).thenAccept { resolvedName ->
+                val normalizedName = resolvedName?.trim()?.takeIf { it.isNotEmpty() } ?: return@thenAccept
+                syncedCreditUsernames[uuid.lowercase()] = normalizedName
+                ThrowerListMod.logger.info("Synced credited player username: {} -> {}", uuid, normalizedName)
+            }
+        }
+    }
+
     private fun betaTesterEntry(
         username: String,
         uuid: String,
         label: String,
-        aliases: List<String> = emptyList(),
     ) = PlayerCustomizationFile(
         username = username,
         uuid = uuid,
-        aliases = aliases.toMutableList(),
         creditLabel = label,
         creditRole = "Beta tester",
         style = NameStyleFile(mode = "inherit_rank"),

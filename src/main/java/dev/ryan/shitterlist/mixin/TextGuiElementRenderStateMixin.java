@@ -1,6 +1,8 @@
 package dev.ryan.throwerlist.mixin;
 
 import dev.ryan.throwerlist.NameStyler;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.render.state.TextGuiElementRenderState;
 import net.minecraft.text.OrderedText;
 import org.spongepowered.asm.mixin.Final;
@@ -16,12 +18,22 @@ public abstract class TextGuiElementRenderStateMixin {
     @Shadow @Final @Mutable
     private OrderedText orderedText;
 
+    @Shadow
+    private TextRenderer.GlyphDrawable preparation;
+
     @Inject(
         method = "prepare()Lnet/minecraft/client/font/TextRenderer$GlyphDrawable;",
         at = @At("HEAD")
     )
     private void throwerlist$decorateQueuedHudText(CallbackInfoReturnable<Object> cir) {
-        if (this.orderedText == null) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (this.preparation != null ||
+            this.orderedText == null ||
+            !NameStyler.INSTANCE.hasGradientStyles() ||
+            client == null ||
+            client.world == null ||
+            client.player == null ||
+            client.currentScreen != null) {
             return;
         }
 
