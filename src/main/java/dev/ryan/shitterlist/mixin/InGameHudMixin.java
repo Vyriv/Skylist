@@ -1,6 +1,7 @@
 package dev.ryan.throwerlist.mixin;
 
 import dev.ryan.throwerlist.NameStyler;
+import dev.ryan.throwerlist.SidebarEntryAccess;
 import net.minecraft.client.gui.hud.InGameHud;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.ScoreboardEntry;
@@ -44,7 +45,7 @@ public abstract class InGameHudMixin {
                 return;
             }
 
-            Text currentName = (Text) access.nameMethod.invoke(sidebarEntry);
+            Text currentName = (Text) access.nameMethod().invoke(sidebarEntry);
             if (currentName == null) {
                 return;
             }
@@ -53,10 +54,10 @@ public abstract class InGameHudMixin {
             if (styledName == currentName) {
                 return;
             }
-            Text score = (Text) access.scoreMethod.invoke(sidebarEntry);
-            int scoreWidth = (int) access.scoreWidthMethod.invoke(sidebarEntry);
+            Text score = (Text) access.scoreMethod().invoke(sidebarEntry);
+            int scoreWidth = (int) access.scoreWidthMethod().invoke(sidebarEntry);
 
-            cir.setReturnValue(access.constructor.newInstance(styledName, score, scoreWidth));
+            cir.setReturnValue(access.constructor().newInstance(styledName, score, scoreWidth));
         } catch (ReflectiveOperationException ignored) {
         }
     }
@@ -94,13 +95,5 @@ public abstract class InGameHudMixin {
         } catch (ReflectiveOperationException ignored) {
             return Optional.empty();
         }
-    }
-
-    private record SidebarEntryAccess(
-        Method nameMethod,
-        Method scoreMethod,
-        Method scoreWidthMethod,
-        Constructor<?> constructor
-    ) {
     }
 }

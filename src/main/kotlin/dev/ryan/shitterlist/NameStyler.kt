@@ -7,11 +7,9 @@ import net.minecraft.text.StringVisitable
 import net.minecraft.text.Style
 import net.minecraft.text.Text
 import net.minecraft.util.Formatting
-import java.util.Collections
 import java.util.LinkedHashMap
 import java.util.Locale
 import java.util.Optional
-import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
 
 object NameStyler {
@@ -19,6 +17,7 @@ object NameStyler {
     private const val textCacheLimit = 512
     private const val stringCacheLimit = 1024
     private const val matchCacheLimit = 2048
+    private const val identityCacheSize = 2048
 
     private enum class TransformKind {
         GRADIENT_TEXT,
@@ -83,16 +82,6 @@ object NameStyler {
         val name: String,
     )
 
-    private data class VersionedTextResult(
-        val version: Long,
-        val result: Text,
-    )
-
-    private data class VersionedOrderedTextResult(
-        val version: Long,
-        val result: OrderedText,
-    )
-
     private class LruCache<K, V>(private val maxEntries: Int) : LinkedHashMap<K, V>(maxEntries, 0.75f, true) {
         @Synchronized
         fun getCached(key: K): V? = super.get(key)
@@ -110,22 +99,85 @@ object NameStyler {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>?): Boolean = size > maxEntries
     }
 
+    private class IdentityCache<K : Any, V : Any>(requestedSize: Int) {
+        private val size = requestedSize.coerceAtLeast(2).nextPowerOfTwo()
+        private val mask = size - 1
+        private val primaryKeys = arrayOfNulls<Any>(size)
+        private val primaryValues = arrayOfNulls<Any>(size)
+        private val secondaryKeys = arrayOfNulls<Any>(size)
+        private val secondaryValues = arrayOfNulls<Any>(size)
+
+        fun get(key: K): V? {
+            val primaryIndex = primaryIndex(key)
+            if (primaryKeys[primaryIndex] === key) {
+                @Suppress("UNCHECKED_CAST")
+                return primaryValues[primaryIndex] as V
+            }
+
+            val secondaryIndex = secondaryIndex(key)
+            if (secondaryKeys[secondaryIndex] === key) {
+                @Suppress("UNCHECKED_CAST")
+                return secondaryValues[secondaryIndex] as V
+            }
+
+            return null
+        }
+
+        fun put(key: K, value: V) {
+            val primaryIndex = primaryIndex(key)
+            if (primaryKeys[primaryIndex] === key || primaryKeys[primaryIndex] == null) {
+                primaryKeys[primaryIndex] = key
+                primaryValues[primaryIndex] = value
+                return
+            }
+
+            val secondaryIndex = secondaryIndex(key)
+            secondaryKeys[secondaryIndex] = key
+            secondaryValues[secondaryIndex] = value
+        }
+
+        fun clear() {
+            primaryKeys.fill(null)
+            primaryValues.fill(null)
+            secondaryKeys.fill(null)
+            secondaryValues.fill(null)
+        }
+
+        private fun primaryIndex(key: K): Int = System.identityHashCode(key) and mask
+
+        private fun secondaryIndex(key: K): Int {
+            val hash = System.identityHashCode(key)
+            return (hash xor (hash ushr 16) xor 0x9E3779B9.toInt()) and mask
+        }
+
+        private fun Int.nextPowerOfTwo(): Int {
+            var value = this - 1
+            value = value or (value ushr 1)
+            value = value or (value ushr 2)
+            value = value or (value ushr 4)
+            value = value or (value ushr 8)
+            value = value or (value ushr 16)
+            return value + 1
+        }
+    }
+
     private val cacheLock = Any()
     private val componentCache = ConcurrentHashMap<GradientCacheKey, Text>()
     // Name/text hooks run from HUD, scoreboard, nametag, tab, and TextRenderer paths.
-    // These caches are bounded and cleared whenever PlayerCustomizationRegistry.version changes.
+    // These caches are bounded or fixed-size and explicitly cleared whenever
+    // PlayerCustomizationRegistry.version changes.
     private val selfNameCache = LruCache<SelfNameCacheKey, Text>(stringCacheLimit)
     private val textTransformCache = LruCache<TextCacheKey, Text>(textCacheLimit)
     private val stringTransformCache = LruCache<StringCacheKey, String>(stringCacheLimit)
     private val matchCache = LruCache<MatchCacheKey, Boolean>(matchCacheLimit)
-    private val gradientTextIdentityCache = Collections.synchronizedMap(WeakHashMap<Text, VersionedTextResult>())
-    private val nameplateTextIdentityCache = Collections.synchronizedMap(WeakHashMap<Text, VersionedTextResult>())
-    private val scoreboardTextIdentityCache = Collections.synchronizedMap(WeakHashMap<Text, VersionedTextResult>())
-    private val sidebarTextIdentityCache = Collections.synchronizedMap(WeakHashMap<Text, VersionedTextResult>())
-    private val chatHeaderTextIdentityCache = Collections.synchronizedMap(WeakHashMap<Text, VersionedTextResult>())
-    private val gradientOrderedTextIdentityCache = Collections.synchronizedMap(WeakHashMap<OrderedText, VersionedOrderedTextResult>())
-    private val nameplateOrderedTextIdentityCache = Collections.synchronizedMap(WeakHashMap<OrderedText, VersionedOrderedTextResult>())
-    private val scoreboardOrderedTextIdentityCache = Collections.synchronizedMap(WeakHashMap<OrderedText, VersionedOrderedTextResult>())
+    private val gradientTextIdentityCache = IdentityCache<Text, Text>(identityCacheSize)
+    private val nameplateTextIdentityCache = IdentityCache<Text, Text>(identityCacheSize)
+    private val scoreboardTextIdentityCache = IdentityCache<Text, Text>(identityCacheSize)
+    private val sidebarTextIdentityCache = IdentityCache<Text, Text>(identityCacheSize)
+    private val chatHeaderTextIdentityCache = IdentityCache<Text, Text>(identityCacheSize)
+    private val gradientOrderedTextIdentityCache = IdentityCache<OrderedText, OrderedText>(identityCacheSize)
+    private val nameplateOrderedTextIdentityCache = IdentityCache<OrderedText, OrderedText>(identityCacheSize)
+    private val scoreboardOrderedTextIdentityCache = IdentityCache<OrderedText, OrderedText>(identityCacheSize)
 
     @Volatile
     private var observedRegistryVersion = Long.MIN_VALUE
@@ -443,27 +495,27 @@ object NameStyler {
         transform: (Text) -> Text,
     ): Text {
         val version = currentRegistryVersion()
-        textIdentityCache(kind)[message]?.takeIf { it.version == version }?.let { return it.result }
+        textIdentityCache(kind).get(message)?.let { return it }
 
         val plain = message.string
         if (!containsForKind(plain, kind, version)) {
-            cacheTextIdentity(kind, message, message, version)
+            cacheTextIdentity(kind, message, message)
             return message
         }
 
         val runs = collectRuns(message)
         val cacheKey = TextCacheKey(version, kind, runsToPlain(runs), styleHash(runs))
         textTransformCache.getCached(cacheKey)?.let { cached ->
-            cacheTextIdentity(kind, message, cached, version)
+            cacheTextIdentity(kind, message, cached)
             return cached
         }
 
         val transformed = transform(message)
         if (transformed !== message) {
             textTransformCache.putCached(cacheKey, transformed)
-            cacheTextIdentity(kind, transformed, transformed, version)
+            cacheTextIdentity(kind, transformed, transformed)
         }
-        cacheTextIdentity(kind, message, transformed, version)
+        cacheTextIdentity(kind, message, transformed)
         return transformed
     }
 
@@ -473,20 +525,20 @@ object NameStyler {
         transform: (OrderedText) -> OrderedText,
     ): OrderedText {
         val version = currentRegistryVersion()
-        orderedTextIdentityCache(kind)[text]?.takeIf { it.version == version }?.let { return it.result }
+        orderedTextIdentityCache(kind).get(text)?.let { return it }
 
         val runs = collectRuns(text)
         val plain = runsToPlain(runs)
         if (!containsForKind(plain, kind, version)) {
-            cacheOrderedTextIdentity(kind, text, text, version)
+            cacheOrderedTextIdentity(kind, text, text)
             return text
         }
 
         val cacheKey = TextCacheKey(version, kind, plain, styleHash(runs))
         textTransformCache.getCached(cacheKey)?.let { cached ->
             val ordered = cached.asOrderedText()
-            cacheOrderedTextIdentity(kind, text, ordered, version)
-            cacheOrderedTextIdentity(kind, ordered, ordered, version)
+            cacheOrderedTextIdentity(kind, text, ordered)
+            cacheOrderedTextIdentity(kind, ordered, ordered)
             return ordered
         }
 
@@ -494,13 +546,13 @@ object NameStyler {
         if (transformed !== text) {
             val transformedRuns = collectRuns(transformed)
             textTransformCache.putCached(cacheKey, runsToText(transformedRuns))
-            cacheOrderedTextIdentity(kind, transformed, transformed, version)
+            cacheOrderedTextIdentity(kind, transformed, transformed)
         }
-        cacheOrderedTextIdentity(kind, text, transformed, version)
+        cacheOrderedTextIdentity(kind, text, transformed)
         return transformed
     }
 
-    private fun textIdentityCache(kind: TransformKind): MutableMap<Text, VersionedTextResult> =
+    private fun textIdentityCache(kind: TransformKind): IdentityCache<Text, Text> =
         when (kind) {
             TransformKind.GRADIENT_TEXT, TransformKind.GRADIENT_STRING -> gradientTextIdentityCache
             TransformKind.NAMEPLATE_TEXT, TransformKind.DECORATED_STRING -> nameplateTextIdentityCache
@@ -509,19 +561,19 @@ object NameStyler {
             TransformKind.CHAT_HEADER_TEXT -> chatHeaderTextIdentityCache
         }
 
-    private fun orderedTextIdentityCache(kind: TransformKind): MutableMap<OrderedText, VersionedOrderedTextResult> =
+    private fun orderedTextIdentityCache(kind: TransformKind): IdentityCache<OrderedText, OrderedText> =
         when (kind) {
             TransformKind.GRADIENT_TEXT, TransformKind.GRADIENT_STRING, TransformKind.CHAT_HEADER_TEXT -> gradientOrderedTextIdentityCache
             TransformKind.NAMEPLATE_TEXT, TransformKind.DECORATED_STRING, TransformKind.SIDEBAR_TEXT -> nameplateOrderedTextIdentityCache
             TransformKind.SCOREBOARD_TEXT, TransformKind.SCOREBOARD_STRING -> scoreboardOrderedTextIdentityCache
         }
 
-    private fun cacheTextIdentity(kind: TransformKind, source: Text, result: Text, version: Long) {
-        textIdentityCache(kind)[source] = VersionedTextResult(version, result)
+    private fun cacheTextIdentity(kind: TransformKind, source: Text, result: Text) {
+        textIdentityCache(kind).put(source, result)
     }
 
-    private fun cacheOrderedTextIdentity(kind: TransformKind, source: OrderedText, result: OrderedText, version: Long) {
-        orderedTextIdentityCache(kind)[source] = VersionedOrderedTextResult(version, result)
+    private fun cacheOrderedTextIdentity(kind: TransformKind, source: OrderedText, result: OrderedText) {
+        orderedTextIdentityCache(kind).put(source, result)
     }
 
     private fun containsForKind(text: String, kind: TransformKind, version: Long): Boolean {

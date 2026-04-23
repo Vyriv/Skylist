@@ -22,6 +22,7 @@ jobs:
           BODY: ${{ github.event.release.body }}
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          RELEASE_ROLE_ID: "1496926549213970432"
         run: |
           DISCORD_WEBHOOK=$(printf '%s' "$DISCORD_WEBHOOK" | tr -d '\r\n')
 
@@ -53,11 +54,22 @@ jobs:
             DESC="${DESC:0:4000}..."
           fi
 
+          CONTENT=""
+          if [ "$EVENT_NAME" = "release" ]; then
+            CONTENT="<@&$RELEASE_ROLE_ID> New release published."
+          fi
+
           payload=$(jq -n \
+            --arg content "$CONTENT" \
             --arg title "$TITLE" \
             --arg url "$URL" \
             --arg desc "$DESC" \
+            --arg githubReleasesUrl "https://github.com/$REPO/releases/latest" \
             '{
+              content: $content,
+              allowed_mentions: {
+                parse: ["roles"]
+              },
               embeds: [
                 {
                   title: $title,
@@ -74,7 +86,7 @@ jobs:
                       type: 2,
                       style: 5,
                       label: "GitHub Releases",
-                      url: "https://github.com/Vyriv/Skylist/releases/latest"
+                      url: $githubReleasesUrl
                     },
                     {
                       type: 2,
