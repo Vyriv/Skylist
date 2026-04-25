@@ -6,6 +6,7 @@ import com.google.gson.reflect.TypeToken
 import net.fabricmc.loader.api.FabricLoader
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.Locale
 import kotlin.text.buildString
 
 object ConfigManager {
@@ -40,6 +41,9 @@ object ConfigManager {
     @Volatile
     private var importState = ImportConfig()
 
+    @Volatile
+    private var lookupCaches = LookupCaches()
+
     @Synchronized
     fun load(): SettingsConfig {
         if (shouldMigrateLegacyConfig()) {
@@ -64,6 +68,7 @@ object ConfigManager {
         if (pruneExpiredEntriesLocked() > 0) {
             writeState()
         }
+        rebuildLookupCachesLocked()
 
         return settings.copy()
     }
@@ -71,6 +76,7 @@ object ConfigManager {
     @Synchronized
     fun save() {
         pruneExpiredEntriesLocked()
+        rebuildLookupCachesLocked()
         writeState()
     }
 
@@ -321,23 +327,18 @@ object ConfigManager {
     fun localUsernames(): List<String> = activePlayers().map { it.username }.sortedBy { it.lowercase() }
 
     @Synchronized
-    fun localListedUsernames(): Set<String> =
-        activePlayers()
-            .filterNot { it.ignored }
-            .mapTo(linkedSetOf()) { it.username.lowercase() }
+    fun localListedUsernames(): Set<String> = lookupCaches.localListedUsernames
 
     @Synchronized
-    fun localIgnoredUsernames(): Set<String> =
-        activePlayers()
-            .filter { it.ignored }
-            .mapTo(linkedSetOf()) { it.username.lowercase() }
+    fun localIgnoredUsernames(): Set<String> = lookupCaches.localIgnoredUsernames
 
     @Synchronized
-    fun miscIgnoredUsernames(): List<String> =
-        settings.miscIgnoredUsernames
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .sortedBy { it.lowercase() }
+    fun miscIgnoredUsernames(): List<String> = lookupCaches.miscIgnoredUsernames
+
+    @Synchronized
+    fun miscIgnoredUsernameSet(): Set<String> = lookupCaches.miscIgnoredUsernameSet
+
+    fun lookupVersion(): Long = lookupCaches.version
 
     @Synchronized
     fun isMiscIgnoreListEnabled(): Boolean = settings.miscIgnoreListEnabled
@@ -351,12 +352,14 @@ object ConfigManager {
 
     @Synchronized
     fun isMiscIgnoredUsername(username: String): Boolean =
-        settings.miscIgnoredUsernames.any { it.equals(username, ignoreCase = true) }
+        normalizeUsernameKey(username)?.let(lookupCaches.miscIgnoredUsernameSet::contains) == true
 
     @Synchronized
     fun isIgnoredUsername(username: String): Boolean =
-        activePlayers().any { it.ignored && it.username.equals(username, ignoreCase = true) } ||
-            (settings.miscIgnoreListEnabled && settings.miscIgnoredUsernames.any { it.equals(username, ignoreCase = true) })
+        normalizeUsernameKey(username)?.let { normalized ->
+            normalized in lookupCaches.localIgnoredUsernames ||
+                (settings.miscIgnoreListEnabled && normalized in lookupCaches.miscIgnoredUsernameSet)
+        } == true
 
     @Synchronized
     fun addMiscIgnoredUsername(username: String): Boolean {
@@ -576,7 +579,8 @@ object ConfigManager {
     }
 
     @Synchronized
-    fun isRemoteHidden(uuid: String): Boolean = uuid.lowercase() in importState.hiddenRemoteUuids
+    fun isRemoteHidden(uuid: String): Boolean =
+        normalizeUuidKey(uuid)?.let(lookupCaches.hiddenRemoteUuids::contains) == true
 
     @Synchronized
     fun isRemoteDisabled(uuid: String): Boolean = isRemoteHidden(uuid)
@@ -724,6 +728,46 @@ object ConfigManager {
         entry.expiresAt = normalizedExpiry.expiresAt
     }
 
+    private fun rebuildLookupCachesLocked() {
+        val localListedUsernames = linkedSetOf<String>()
+        val localIgnoredUsernames = linkedSetOf<String>()
+        players.forEach { entry ->
+            val normalizedUsername = normalizeUsernameKey(entry.username) ?: return@forEach
+            if (entry.ignored) {
+                localIgnoredUsernames.add(normalizedUsername)
+            } else {
+                localListedUsernames.add(normalizedUsername)
+            }
+        }
+
+        val miscIgnoredUsernames = settings.miscIgnoredUsernames
+            .mapNotNull(::normalizeUsernameKey)
+            .distinct()
+            .sorted()
+        val hiddenRemoteUuids = importState.hiddenRemoteUuids
+            .mapNotNull(::normalizeUuidKey)
+            .toCollection(linkedSetOf())
+
+        lookupCaches = LookupCaches(
+            version = lookupCaches.version + 1L,
+            localListedUsernames = localListedUsernames,
+            localIgnoredUsernames = localIgnoredUsernames,
+            miscIgnoredUsernames = miscIgnoredUsernames,
+            miscIgnoredUsernameSet = miscIgnoredUsernames.toCollection(linkedSetOf()),
+            hiddenRemoteUuids = hiddenRemoteUuids,
+        )
+    }
+
+    private fun normalizeUsernameKey(username: String?): String? =
+        username?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.lowercase(Locale.ROOT)
+
+    private fun normalizeUuidKey(uuid: String?): String? =
+        uuid?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.lowercase(Locale.ROOT)
+
     private fun writeState() {
         Files.createDirectories(configDirectoryPath)
         Files.writeString(settingsPath, gson.toJson(settings))
@@ -803,6 +847,15 @@ object ConfigManager {
     data class ImportPlayersResult(
         val importedCount: Int,
         val skippedCount: Int,
+    )
+
+    private data class LookupCaches(
+        val version: Long = 0L,
+        val localListedUsernames: Set<String> = emptySet(),
+        val localIgnoredUsernames: Set<String> = emptySet(),
+        val miscIgnoredUsernames: List<String> = emptyList(),
+        val miscIgnoredUsernameSet: Set<String> = emptySet(),
+        val hiddenRemoteUuids: Set<String> = emptySet(),
     )
 
     private data class LegacyThrowerListConfig(

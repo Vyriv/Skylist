@@ -19,7 +19,7 @@ object ContentManager {
 
     private const val reasonsResourcePath = "throwerlist/content/reasons.json"
     private const val uiTextResourcePath = "throwerlist/content/ui_text.json"
-    private const val remotePeopleUrl = "https://jsonhosting.com/api/json/35baa423"
+    private const val remotePeopleUrl = "https://plain-dawn-a5d2.ryaneagers2015.workers.dev/cosmetics/people"
     private val fallbackTrollButtonMessages = listOf("Don't Press me")
     private val httpClient: HttpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(5))
@@ -186,17 +186,31 @@ object ContentManager {
 
         return when (style.mode.trim().lowercase()) {
             "inherit_rank", "inherit-rank", "inherit" ->
-                LoadedNameStyle(LoadedNameStyle.Mode.INHERIT_RANK)
+                LoadedNameStyle(LoadedNameStyle.Mode.INHERIT_RANK, bold = style.bold)
 
             "solid" -> {
                 val color = parseColor(style.color ?: style.leftColor ?: style.rightColor) ?: return null
-                LoadedNameStyle(LoadedNameStyle.Mode.SOLID, color, color)
+                LoadedNameStyle(LoadedNameStyle.Mode.SOLID, color, color, style.bold)
             }
 
             "gradient" -> {
                 val left = parseColor(style.leftColor ?: style.color) ?: return null
                 val right = parseColor(style.rightColor ?: style.color) ?: return null
-                LoadedNameStyle(LoadedNameStyle.Mode.GRADIENT, left, right)
+                LoadedNameStyle(LoadedNameStyle.Mode.GRADIENT, left, right, style.bold)
+            }
+
+            "multicolor" -> {
+                val letterColors = style.letterColors
+                    ?.mapNotNull(::parseColor)
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: return null
+                LoadedNameStyle(
+                    mode = LoadedNameStyle.Mode.MULTICOLOR,
+                    leftColor = letterColors.first(),
+                    rightColor = letterColors.last(),
+                    bold = style.bold,
+                    letterColors = letterColors,
+                )
             }
 
             else -> null
@@ -343,6 +357,11 @@ object ContentManager {
             color = color?.trim()?.takeIf { it.isNotEmpty() },
             leftColor = leftColor?.trim()?.takeIf { it.isNotEmpty() },
             rightColor = rightColor?.trim()?.takeIf { it.isNotEmpty() },
+            letterColors = letterColors
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.toMutableList()
+                ?.takeIf { it.isNotEmpty() },
         )
 
     private fun BadgeFile.normalized(): BadgeFile =
@@ -386,11 +405,14 @@ object ContentManager {
         val mode: Mode,
         val leftColor: Int? = null,
         val rightColor: Int? = null,
+        val bold: Boolean = false,
+        val letterColors: List<Int>? = null,
     ) {
         enum class Mode {
             INHERIT_RANK,
             SOLID,
             GRADIENT,
+            MULTICOLOR,
         }
     }
 
@@ -445,6 +467,8 @@ object ContentManager {
         var color: String? = null,
         var leftColor: String? = null,
         var rightColor: String? = null,
+        var letterColors: MutableList<String>? = null,
+        var bold: Boolean = false,
     )
 
     data class BadgeFile(
@@ -462,16 +486,25 @@ object ContentManager {
     )
 
     private fun fetchRemotePeopleContent(): PeopleContent? {
+        val requestUri = URI.create(
+            if (remotePeopleUrl.contains('?')) {
+                "$remotePeopleUrl&ts=${System.currentTimeMillis()}"
+            } else {
+                "$remotePeopleUrl?ts=${System.currentTimeMillis()}"
+            },
+        )
         val request = HttpRequest.newBuilder()
-            .uri(URI.create(remotePeopleUrl))
+            .uri(requestUri)
             .timeout(Duration.ofSeconds(10))
             .header("accept", "application/json,*/*")
+            .header("cache-control", "no-cache, no-store, max-age=0")
+            .header("pragma", "no-cache")
             .GET()
             .build()
 
         val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
         if (response.statusCode() != 200) {
-            error("Unexpected response ${response.statusCode()} from $remotePeopleUrl")
+            error("Unexpected response ${response.statusCode()} from $requestUri")
         }
 
         val body = response.body().trim()

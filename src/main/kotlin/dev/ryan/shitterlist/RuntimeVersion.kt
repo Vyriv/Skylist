@@ -4,7 +4,7 @@ import net.fabricmc.loader.api.FabricLoader
 import java.nio.file.Path
 
 object RuntimeVersion {
-    private const val modId = "throwerlist"
+    private const val modId = "skylist"
     private val minecraftVersionPattern = Regex("""-(\d+\.\d+\.\d+)$""")
 
     fun currentVersion(): String =

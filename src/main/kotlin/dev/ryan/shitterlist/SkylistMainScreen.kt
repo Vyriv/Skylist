@@ -114,7 +114,7 @@ class SkylistMainScreen(
             statusMessage = "Refreshing scammer cache and cosmetics..."
             statusColor = 0xFF7FD6FF.toInt()
             val scammerRefresh = ScammerListManager.refreshAsync()
-            val cosmeticsRefresh = ContentManager.refreshRemotePeopleNow(logPrefix = "manual-ui")
+            val cosmeticsRefresh = SkylistBaseCommandHandler.refreshCosmetics()
 
             CompletableFuture.allOf(scammerRefresh, cosmeticsRefresh).whenComplete { _, throwable ->
                 client?.execute {

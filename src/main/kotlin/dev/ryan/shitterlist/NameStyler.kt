@@ -30,10 +30,10 @@ object NameStyler {
         SCOREBOARD_STRING,
     }
 
-    private data class GradientCacheKey(
+    private data class ColorizedCacheKey(
         val content: String,
-        val leftColor: Int,
-        val rightColor: Int,
+        val kind: String,
+        val colors: List<Int>,
     )
 
     private data class StyledSegment(
@@ -162,7 +162,7 @@ object NameStyler {
     }
 
     private val cacheLock = Any()
-    private val componentCache = ConcurrentHashMap<GradientCacheKey, Text>()
+    private val componentCache = ConcurrentHashMap<ColorizedCacheKey, Text>()
     // Name/text hooks run from HUD, scoreboard, nametag, tab, and TextRenderer paths.
     // These caches are bounded or fixed-size and explicitly cleared whenever
     // PlayerCustomizationRegistry.version changes.
@@ -239,7 +239,7 @@ object NameStyler {
         PlayerCustomizationRegistry.findByName(name)?.hasNameCustomization() == true
 
     fun hasExplicitNameColors(name: String?): Boolean =
-        PlayerCustomizationRegistry.findByName(name)?.nameColors != null
+        PlayerCustomizationRegistry.findByName(name)?.hasExplicitNameColors() == true
 
     fun containsTargetName(text: String?): Boolean =
         containsCandidate(text, PlayerCustomizationRegistry.allNameCandidates)
@@ -272,7 +272,7 @@ object NameStyler {
         }
 
         val rawName = current.string
-        if (PlayerCustomizationRegistry.findByName(rawName)?.nameColors == null) {
+        if (PlayerCustomizationRegistry.findByName(rawName)?.hasNameCustomization() != true) {
             return current
         }
         return styledSelfName(rawName)
@@ -364,7 +364,7 @@ object NameStyler {
 
         var output: String = raw
         PlayerCustomizationRegistry.entries.forEach { customization ->
-            if (!customization.hasNameCustomization() || customization.nameColors == null) {
+            if (!customization.hasNameCustomization() || !customization.hasExplicitNameColors()) {
                 return@forEach
             }
 
@@ -387,7 +387,7 @@ object NameStyler {
                 }
 
                 val matchedName = output.substring(matchIndex, matchIndex + match.matchedName.length)
-                rebuilt.append(toLegacyGradient(matchedName, customization))
+                rebuilt.append(toLegacyStyledName(matchedName, customization))
                 index = matchIndex + match.matchedName.length
             }
 
@@ -444,7 +444,7 @@ object NameStyler {
                 val inheritedRankCodes = inheritedLegacyRankCodes(output, matchIndex, customization)
                 rebuilt.append(
                     when {
-                        customization.nameColors != null -> toLegacyGradient(matchedName, customization)
+                        customization.hasExplicitNameColors() || customization.nameBold -> toLegacyStyledName(matchedName, customization, inheritedRankCodes)
                         inheritedRankCodes.isNotEmpty() -> inheritedRankCodes + matchedName
                         else -> matchedName
                     },
@@ -893,7 +893,7 @@ object NameStyler {
             val resolvedMatchedName = plain.substring(matchIndex, matchEnd)
             val baseStyle = styleAt(runs, matchIndex)
             val styledName = when {
-                customization.nameColors != null -> {
+                customization.hasExplicitNameColors() -> {
                     changed = true
                     cachedGradient(resolvedMatchedName, customization, baseStyle)
                 }
@@ -1136,7 +1136,7 @@ object NameStyler {
         defaultStyle: Style,
         recentSegments: ArrayDeque<StyledSegment>,
     ): Style {
-        if (customization.nameColors != null) {
+        if (customization.hasExplicitNameColors()) {
             return defaultStyle
         }
 
@@ -1180,7 +1180,7 @@ object NameStyler {
         matchIndex: Int,
         customization: PlayerCustomizationRegistry.PlayerCustomization,
     ): String {
-        if (customization.nameColors != null) {
+        if (customization.hasExplicitNameColors()) {
             return ""
         }
 
@@ -1391,22 +1391,52 @@ object NameStyler {
         customization: PlayerCustomizationRegistry.PlayerCustomization,
         baseStyle: Style = Style.EMPTY,
     ): Text {
-        val colors = customization.nameColors ?: return Text.literal(content).setStyle(baseStyle)
-        val key = GradientCacheKey(content.lowercase(Locale.ROOT), colors.left, colors.right)
-        val cached = componentCache.computeIfAbsent(key) {
-            gradientText(content, colors.left, colors.right, Style.EMPTY)
+        val effectiveBaseStyle = applyCustomNameStyle(baseStyle, customization)
+        val key = when {
+            !customization.nameLetterColors.isNullOrEmpty() -> ColorizedCacheKey(
+                content = content.lowercase(Locale.ROOT),
+                kind = "multicolor",
+                colors = customization.nameLetterColors,
+            )
+
+            customization.nameColors != null -> ColorizedCacheKey(
+                content = content.lowercase(Locale.ROOT),
+                kind = "gradient",
+                colors = listOf(customization.nameColors.left, customization.nameColors.right),
+            )
+
+            else -> return Text.literal(content).setStyle(effectiveBaseStyle)
         }
 
-        if (baseStyle.isEmpty) {
+        val cached = componentCache.computeIfAbsent(key) {
+            when (key.kind) {
+                "multicolor" -> multiColorText(content, key.colors, Style.EMPTY)
+                else -> gradientText(content, key.colors[0], key.colors[1], Style.EMPTY)
+            }
+        }
+
+        if (effectiveBaseStyle.isEmpty) {
             return cached.copy()
         }
 
         val rebuilt = Text.empty()
         cached.visit({ style, segment ->
-            rebuilt.append(Text.literal(segment).setStyle(style.withParent(baseStyle)))
+            rebuilt.append(Text.literal(segment).setStyle(style.withParent(effectiveBaseStyle)))
             Optional.empty<Unit>()
         }, Style.EMPTY)
         return rebuilt
+    }
+
+    private fun multiColorText(content: String, colors: List<Int>, baseStyle: Style): Text {
+        val text = Text.empty()
+        val fallback = colors.lastOrNull() ?: return Text.literal(content).setStyle(baseStyle)
+
+        content.forEachIndexed { index, character ->
+            val color = colors.getOrElse(index) { fallback }
+            text.append(Text.literal(character.toString()).setStyle(baseStyle.withColor(color)))
+        }
+
+        return text
     }
 
     private fun gradientText(content: String, leftColor: Int, rightColor: Int, baseStyle: Style): Text {
@@ -1422,24 +1452,55 @@ object NameStyler {
         return text
     }
 
-    private fun toLegacyGradient(content: String, customization: PlayerCustomizationRegistry.PlayerCustomization): String {
-        val colors = customization.nameColors ?: return content
+    private fun toLegacyStyledName(
+        content: String,
+        customization: PlayerCustomizationRegistry.PlayerCustomization,
+        inheritedRankCodes: String = "",
+    ): String {
+        val gradientColors = customization.nameColors
+        val letterColors = customization.nameLetterColors
+        if (gradientColors == null && letterColors.isNullOrEmpty()) {
+            return buildString {
+                if (inheritedRankCodes.isNotEmpty()) {
+                    append(inheritedRankCodes)
+                }
+                if (customization.nameBold) {
+                    append(legacyFormat).append('l')
+                }
+                append(content)
+            }
+        }
+
         val output = StringBuilder()
         val maxIndex = (content.length - 1).coerceAtLeast(1)
+        val fallbackLetterColor = letterColors?.lastOrNull()
 
         content.forEachIndexed { index, character ->
-            val progress = index.toFloat() / maxIndex.toFloat()
-            val color = interpolate(colors.left, colors.right, progress)
+            val color = if (!letterColors.isNullOrEmpty()) {
+                letterColors.getOrElse(index) { fallbackLetterColor ?: letterColors.last() }
+            } else {
+                val progress = index.toFloat() / maxIndex.toFloat()
+                interpolate(gradientColors!!.left, gradientColors.right, progress)
+            }
             val hex = "%06X".format(color)
             output.append(legacyFormat).append('x')
             hex.forEach { digit ->
                 output.append(legacyFormat).append(digit)
+            }
+            if (customization.nameBold) {
+                output.append(legacyFormat).append('l')
             }
             output.append(character)
         }
 
         return output.toString()
     }
+
+    private fun applyCustomNameStyle(
+        style: Style,
+        customization: PlayerCustomizationRegistry.PlayerCustomization,
+    ): Style =
+        if (customization.nameBold) style.withBold(true) else style
 
     private fun activeLegacyCodes(text: String, endExclusive: Int): String {
         var colorCode: Char? = null

@@ -23,7 +23,6 @@ object SkylistBaseCommandHandler {
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             dispatcher.register(buildRoot("skylist"))
             dispatcher.register(buildRoot("sl"))
-            dispatcher.register(buildRoot("tl"))
         }
     }
 
@@ -63,6 +62,9 @@ object SkylistBaseCommandHandler {
                     .executes(::checkTarget),
                 ),
             )
+            .then(literal("updatecosmetics")
+                .executes(::updateCosmetics),
+            )
             .then(literal("settings").executes {
                 ThrowerListMod.client.execute {
                     ThrowerListMod.client.setScreen(SkylistBaseSettingsScreen(SkylistMainScreen()))
@@ -90,9 +92,6 @@ object SkylistBaseCommandHandler {
                         .then(argument("username", StringArgumentType.word())
                             .executes(::printDiscordInfo),
                         ),
-                    )
-                    .then(literal("updatecosmetics")
-                        .executes(::updateCosmetics),
                     ),
                 ),
             )
@@ -119,7 +118,7 @@ object SkylistBaseCommandHandler {
         source.sendFeedback(helpLine("settings", "dev", "sethypixelapikey", "<key>"))
         source.sendFeedback(helpLine("settings", "dev", "getuuid", "<username>"))
         source.sendFeedback(helpLine("settings", "dev", "getdiscord", "<username>"))
-        source.sendFeedback(helpLine("settings", "dev", "updatecosmetics"))
+        source.sendFeedback(helpLine("updatecosmetics"))
         source.sendFeedback(helpLine("help"))
         return Command.SINGLE_SUCCESS
     }
@@ -266,7 +265,7 @@ object SkylistBaseCommandHandler {
         val source = context.source
         source.sendFeedback(tlMessage(Text.literal("Refreshing cosmetic player assignments from the live API...").formatted(Formatting.AQUA)))
 
-        ContentManager.refreshRemotePeopleNow(logPrefix = "manual").whenComplete { _, throwable ->
+        refreshCosmetics().whenComplete { _, throwable ->
             ThrowerListMod.client.execute {
                 when {
                     throwable != null -> {
@@ -288,6 +287,9 @@ object SkylistBaseCommandHandler {
 
         return Command.SINGLE_SUCCESS
     }
+
+    fun refreshCosmetics(): java.util.concurrent.CompletableFuture<Unit> =
+        ContentManager.refreshRemotePeopleNow(logPrefix = "command")
 
     private fun checkTarget(context: CommandContext<FabricClientCommandSource>): Int {
         val source = context.source

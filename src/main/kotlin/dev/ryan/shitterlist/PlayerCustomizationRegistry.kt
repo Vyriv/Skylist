@@ -32,6 +32,8 @@ object PlayerCustomizationRegistry {
         val uuid: UUID? = null,
         val aliases: List<String> = emptyList(),
         val nameColors: NameColors? = null,
+        val nameLetterColors: List<Int>? = null,
+        val nameBold: Boolean = false,
         val nameBadge: NameBadge? = null,
         val capeResourcePath: String? = null,
         val capeUrl: String? = null,
@@ -79,7 +81,9 @@ object PlayerCustomizationRegistry {
             }
         }
 
-        fun hasNameCustomization(): Boolean = nameColors != null || nameBadge != null
+        fun hasExplicitNameColors(): Boolean = nameColors != null || !nameLetterColors.isNullOrEmpty()
+
+        fun hasNameCustomization(): Boolean = hasExplicitNameColors() || nameBold || nameBadge != null
 
         fun hasCapeCustomization(): Boolean =
             !capeResourcePath.isNullOrBlank() || !capeUrl.isNullOrBlank()
@@ -255,7 +259,7 @@ object PlayerCustomizationRegistry {
                 styledNameCandidates.addAll(exactCandidates)
                 scoreboardStyledNameCandidates.addAll(scoreboardCandidates(customization, names))
             }
-            if (customization.nameColors != null) {
+            if (customization.hasExplicitNameColors()) {
                 gradientNameCandidates.addAll(exactCandidates)
                 scoreboardGradientNameCandidates.addAll(scoreboardCandidates(customization, names))
             }
@@ -358,6 +362,8 @@ object PlayerCustomizationRegistry {
             uuid = resolvedUuid,
             aliases = mergedAliases,
             nameColors = overlay.nameColors ?: nameColors,
+            nameLetterColors = overlay.nameLetterColors ?: nameLetterColors,
+            nameBold = overlay.nameBold || nameBold,
             nameBadge = overlay.nameBadge ?: nameBadge,
             capeResourcePath = overlay.capeResourcePath ?: capeResourcePath,
             capeUrl = overlay.capeUrl ?: capeUrl,
@@ -398,6 +404,10 @@ object PlayerCustomizationRegistry {
 
             else -> null
         }
+        val nameLetterColors = when (entry.style?.mode) {
+            ContentManager.LoadedNameStyle.Mode.MULTICOLOR -> entry.style.letterColors
+            else -> null
+        }
 
         val badge = entry.badge?.let {
             NameBadge(
@@ -412,6 +422,8 @@ object PlayerCustomizationRegistry {
             uuid = uuid,
             aliases = entry.aliases,
             nameColors = nameColors,
+            nameLetterColors = nameLetterColors,
+            nameBold = entry.style?.bold == true,
             nameBadge = badge,
             capeResourcePath = entry.capeResourcePath,
             capeUrl = entry.capeUrl,
