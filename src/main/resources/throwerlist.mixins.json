@@ -9,6 +9,7 @@
     "LivingEntityRenderStateMixin",
     "EntityRendererMixin",
     "InGameHudMixin",
+    "LabelCommandRendererMixin",
     "LivingEntityRendererMixin",
     "PlayerEntityRendererMixin",
     "PlayerListEntryMixin",

@@ -18,8 +18,27 @@ public abstract class EntityRendererMixin<T extends Entity, S extends EntityRend
         if (current == null) {
             return;
         }
+        if (NameStyler.INSTANCE.containsAnimatedStyledTargetName(current.getString())) {
+            NameStyler.INSTANCE.debugRenderReceipt(
+                "entity-render-state",
+                "EntityRenderer.updateRenderState",
+                current.getString(),
+                current.getString(),
+                System.identityHashCode(current),
+                true
+            );
+            return;
+        }
 
         Text styled = NameStyler.INSTANCE.applyNameplateDecorations(current);
+        NameStyler.INSTANCE.debugRenderReceipt(
+            "entity-render-state",
+            "EntityRenderer.updateRenderState",
+            current.getString(),
+            styled.getString(),
+            System.identityHashCode(styled),
+            styled == current
+        );
         if (styled != current) {
             state.displayName = styled;
         }

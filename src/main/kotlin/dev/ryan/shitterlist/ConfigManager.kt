@@ -10,6 +10,7 @@ import java.util.Locale
 import kotlin.text.buildString
 
 object ConfigManager {
+    const val scammerStorageDisabledValue = "none"
     private const val defaultLocalAutokickTemplate = "[SL] <IGN> is on Vyriv's Skylist for <REASON>"
     private const val defaultRemoteAutokickTemplate = "[SL] <IGN> is on Vyriv's Skylist for <REASON>. Appeal at gg/4ZSFKWSY65"
     val gson: Gson = GsonBuilder().setPrettyPrinting().create()
@@ -232,6 +233,40 @@ object ConfigManager {
         settings.scammerAutokickEnabled = enabled
         save()
         return isScammerAutokickEnabled()
+    }
+
+    @Synchronized
+    fun getScammerLogOnlyThreshold(): Double =
+        settings.scammerLogOnlyThreshold?.takeIf { it > 0.0 } ?: ScammerListManager.DEFAULT_LOG_ONLY_THRESHOLD
+
+    @Synchronized
+    fun setScammerLogOnlyThreshold(value: Double?): Double {
+        settings.scammerLogOnlyThreshold = value?.takeIf { it > 0.0 } ?: ScammerListManager.DEFAULT_LOG_ONLY_THRESHOLD
+        save()
+        ScammerListManager.recomputeSeverityResults()
+        return getScammerLogOnlyThreshold()
+    }
+
+    @Synchronized
+    fun getScammerAutokickThreshold(): ScammerListManager.ScammerSeverity =
+        parseScammerSeverity(settings.scammerAutokickThreshold) ?: ScammerListManager.ScammerSeverity.CRITICAL
+
+    @Synchronized
+    fun setScammerAutokickThreshold(value: ScammerListManager.ScammerSeverity): ScammerListManager.ScammerSeverity {
+        settings.scammerAutokickThreshold = value.name
+        save()
+        return getScammerAutokickThreshold()
+    }
+
+    @Synchronized
+    fun getScammerWarningThreshold(): ScammerListManager.ScammerSeverity =
+        parseScammerSeverity(settings.scammerWarningThreshold) ?: ScammerListManager.ScammerSeverity.MEDIUM
+
+    @Synchronized
+    fun setScammerWarningThreshold(value: ScammerListManager.ScammerSeverity): ScammerListManager.ScammerSeverity {
+        settings.scammerWarningThreshold = value.name
+        save()
+        return getScammerWarningThreshold()
     }
 
     @Synchronized
@@ -658,14 +693,25 @@ object ConfigManager {
             .mapNotNull { it.trim().takeIf { trimmed -> trimmed.matches(Regex("^[A-Za-z0-9_]{1,16}$")) } }
             .distinctBy { it.lowercase() }
             .toMutableList()
-        settings.scammerStorageDuration = settings.scammerStorageDuration?.trim()?.takeIf { it.isNotEmpty() }
+        settings.scammerStorageDuration = settings.scammerStorageDuration
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { if (it.equals(scammerStorageDisabledValue, ignoreCase = true)) scammerStorageDisabledValue else it }
         settings.scammerAutokickEnabled = settings.scammerAutokickEnabled ?: false
+        settings.scammerLogOnlyThreshold = settings.scammerLogOnlyThreshold?.takeIf { it > 0.0 } ?: ScammerListManager.DEFAULT_LOG_ONLY_THRESHOLD
+        settings.scammerAutokickThreshold = parseScammerSeverity(settings.scammerAutokickThreshold)?.name ?: ScammerListManager.ScammerSeverity.CRITICAL.name
         settings.announceScammerHitsEnabled = settings.announceScammerHitsEnabled ?: false
+        settings.scammerWarningThreshold = parseScammerSeverity(settings.scammerWarningThreshold)?.name ?: ScammerListManager.ScammerSeverity.MEDIUM.name
         settings.scammerOnlyNotifyEnabled = settings.scammerOnlyNotifyEnabled ?: true
         settings.tradeScammerPopupEnabled = settings.tradeScammerPopupEnabled ?: true
         settings.dungeonAutokick = settings.dungeonAutokick.normalized()
         settings.enabled = isAutokickEnabled()
     }
+
+    private fun parseScammerSeverity(value: String?): ScammerListManager.ScammerSeverity? =
+        value?.trim()?.takeIf { it.isNotEmpty() }?.uppercase()?.let { raw ->
+            ScammerListManager.ScammerSeverity.entries.firstOrNull { it.name == raw }
+        }
 
     private fun MutableMap<String, String?>.normalizedValue(floor: String): String? =
         get(floor.trim().uppercase())?.trim()?.takeIf { it.isNotEmpty() }
@@ -810,7 +856,10 @@ object ConfigManager {
         var miscIgnoredUsernames: MutableList<String> = mutableListOf(),
         var scammerStorageDuration: String? = null,
         var scammerAutokickEnabled: Boolean? = false,
+        var scammerLogOnlyThreshold: Double? = ScammerListManager.DEFAULT_LOG_ONLY_THRESHOLD,
+        var scammerAutokickThreshold: String? = ScammerListManager.ScammerSeverity.CRITICAL.name,
         var announceScammerHitsEnabled: Boolean? = false,
+        var scammerWarningThreshold: String? = ScammerListManager.ScammerSeverity.MEDIUM.name,
         var scammerOnlyNotifyEnabled: Boolean? = true,
         var tradeScammerPopupEnabled: Boolean? = true,
         var swingSpeedEnabled: Boolean = false,

@@ -12,13 +12,17 @@ class ScammerWarningScreen(
     private val listPhrase: String,
     private val reason: String,
     private val caseTimeMillis: Long?,
+    private val severity: ScammerListManager.ScammerSeverity?,
+    private val score: Double?,
+    private val recommendedAction: ScammerListManager.ScammerRecommendedAction,
+    private val continueCommand: String? = null,
 ) : Screen(Text.literal("Scammer Warning")) {
     private var acknowledgeButton: ButtonWidget? = null
 
     override fun init() {
         super.init()
-        acknowledgeButton = ThemedButtonWidget.builder(Text.literal("I understand")) {
-            client?.player?.networkHandler?.sendChatCommand("trade $username")
+        acknowledgeButton = ThemedButtonWidget.builder(Text.literal(if (continueCommand != null) "Continue" else "Dismiss")) {
+            continueCommand?.let { client?.player?.networkHandler?.sendChatCommand(it) }
             close()
         }.dimensions(width / 2 - 60, height / 2 + 26, 120, 20).build().also { addDrawableChild(it) }
     }
@@ -38,11 +42,12 @@ class ScammerWarningScreen(
         val bottom = height / 2 + 70
         val wrappedReason = wrap(reason, 300)
         ThemeRenderer.drawPanel(context, left, top, right, bottom, 24, theme)
-        drawCentered(context, "$username is on $listPhrase", width / 2, top + 18, 0xFFFF6B6B.toInt())
+        drawCentered(context, "$username is on $listPhrase", width / 2, top + 18, severity?.color ?: 0xFFFF6B6B.toInt())
         wrappedReason.forEachIndexed { index, line ->
             drawCentered(context, line, width / 2, top + 38 + index * 10, 0xFFFFFFFF.toInt())
         }
-        drawCentered(context, relativeCaseText(), width / 2, top + 52 + wrappedReason.size * 10, theme.subtleText)
+        drawCentered(context, severityLine(), width / 2, top + 52 + wrappedReason.size * 10, theme.lightTextAccent)
+        drawCentered(context, relativeCaseText(), width / 2, top + 64 + wrappedReason.size * 10, theme.subtleText)
         super.render(context, mouseX, mouseY, deltaTicks)
         ThemeRenderer.drawButton(context, acknowledgeButton, mouseX.toDouble(), mouseY.toDouble(), false, theme)
     }
@@ -84,5 +89,13 @@ class ScammerWarningScreen(
             return "Case was $minutes minute${if (minutes == 1L) "" else "s"} ago"
         }
         return "Case was just now"
+    }
+
+    private fun severityLine(): String {
+        val severityText = severity?.label ?: "Unknown"
+        val scoreText = score?.let {
+            if (it % 1.0 == 0.0) it.toLong().toString() else String.format("%.2f", it).trimEnd('0').trimEnd('.')
+        } ?: "?"
+        return "$severityText severity • score $scoreText • ${recommendedAction.name.replace('_', ' ')}"
     }
 }

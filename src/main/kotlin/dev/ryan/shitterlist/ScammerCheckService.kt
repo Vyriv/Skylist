@@ -93,7 +93,7 @@ object ScammerCheckService {
             val key = cacheKeyFor(resolved)
             val cached = cachedVerdictFor(key)
             if (cached != null) {
-                val cachedResult = cached.toResult()
+                val cachedResult = cached.toResult()?.copy(checkSource = request.source)
                 if (!cached.positive || cachedResult != null) {
                     request.future.complete(
                         CheckOutcome(
@@ -133,12 +133,17 @@ object ScammerCheckService {
                 }
 
                 if (entry != null) {
+                    val severityResult = ScammerListManager.getSeverityResult(entry)
                     val result = CheckResult(
                         username = resolveDisplayName(entry.username, entry.uuid),
                         sourceLabel = "SBZ scammer",
                         reason = entry.reason,
+                        checkSource = request.source,
                         entry = entry,
-                        severityColor = entry.severity.color,
+                        severity = entry.severityLevel,
+                        severityResult = severityResult,
+                        recommendedAction = severityResult.recommendedAction,
+                        severityColor = entry.severityLevel.color,
                         caseTimeMillis = entry.creationTimeMillis,
                     )
                     storeVerdict(key, result, positive = true)
@@ -187,8 +192,17 @@ object ScammerCheckService {
     }
 
     private fun storeVerdict(key: String, result: CheckResult?, positive: Boolean) {
+        val storageDuration = ConfigManager.getScammerStorageDuration()
+        if (positive && storageDuration.equals(ConfigManager.scammerStorageDisabledValue, ignoreCase = true)) {
+            synchronized(verdicts) {
+                verdicts.remove(key)
+            }
+            saveCache()
+            return
+        }
+
         val expiresAt = if (positive) {
-            ConfigManager.getScammerStorageDuration()?.let { duration ->
+            storageDuration?.let { duration ->
                 EntryExpiry.parse(duration)?.applyTo(System.currentTimeMillis())
             }
         } else {
@@ -275,7 +289,11 @@ object ScammerCheckService {
         val username: String,
         val sourceLabel: String,
         val reason: String,
+        val checkSource: CheckSource,
         val entry: ScammerListManager.ScammerEntry?,
+        val severity: ScammerListManager.ScammerSeverity?,
+        val severityResult: ScammerListManager.SeverityResult?,
+        val recommendedAction: ScammerListManager.ScammerRecommendedAction,
         val severityColor: Int?,
         val caseTimeMillis: Long?,
     )
@@ -337,8 +355,12 @@ object ScammerCheckService {
                     username = liveEntry?.username ?: username ?: uuid ?: "unknown",
                     sourceLabel = sourceLabel ?: "SBZ scammer",
                     reason = reason ?: "Unknown",
+                    checkSource = CheckSource.SLASH_COMMAND,
                     entry = liveEntry,
-                    severityColor = liveEntry?.severity?.color,
+                    severity = liveEntry?.severityLevel,
+                    severityResult = liveEntry?.severityResult,
+                    recommendedAction = liveEntry?.severityResult?.recommendedAction ?: ScammerListManager.ScammerRecommendedAction.NONE,
+                    severityColor = liveEntry?.severityLevel?.color,
                     caseTimeMillis = liveEntry?.creationTimeMillis,
                 )
                 if (result.entry != null || uuid == null) result else null

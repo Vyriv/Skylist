@@ -33,6 +33,9 @@ object PlayerCustomizationRegistry {
         val aliases: List<String> = emptyList(),
         val nameColors: NameColors? = null,
         val nameLetterColors: List<Int>? = null,
+        val nameAnimated: Boolean = false,
+        val nameAnimationSpeed: Float? = null,
+        val nameAnimationSteps: Int? = null,
         val nameBold: Boolean = false,
         val nameBadge: NameBadge? = null,
         val capeResourcePath: String? = null,
@@ -42,6 +45,11 @@ object PlayerCustomizationRegistry {
         val scaleY: Float? = null,
         val scaleZ: Float? = null,
     ) {
+        val explicitNameColors: Boolean = nameColors != null || !nameLetterColors.isNullOrEmpty()
+        val animatedGradient: Boolean = nameAnimated && nameColors?.let { it.left != it.right } == true
+        val hasBadge: Boolean = nameBadge != null
+        val hasDecorations: Boolean = explicitNameColors || nameBold || hasBadge
+
         @Volatile
         var syncedUuid: UUID? = uuid
             private set
@@ -81,9 +89,9 @@ object PlayerCustomizationRegistry {
             }
         }
 
-        fun hasExplicitNameColors(): Boolean = nameColors != null || !nameLetterColors.isNullOrEmpty()
+        fun hasExplicitNameColors(): Boolean = explicitNameColors
 
-        fun hasNameCustomization(): Boolean = hasExplicitNameColors() || nameBold || nameBadge != null
+        fun hasNameCustomization(): Boolean = hasDecorations
 
         fun hasCapeCustomization(): Boolean =
             !capeResourcePath.isNullOrBlank() || !capeUrl.isNullOrBlank()
@@ -363,6 +371,9 @@ object PlayerCustomizationRegistry {
             aliases = mergedAliases,
             nameColors = overlay.nameColors ?: nameColors,
             nameLetterColors = overlay.nameLetterColors ?: nameLetterColors,
+            nameAnimated = overlay.nameAnimated || nameAnimated,
+            nameAnimationSpeed = overlay.nameAnimationSpeed ?: nameAnimationSpeed,
+            nameAnimationSteps = overlay.nameAnimationSteps ?: nameAnimationSteps,
             nameBold = overlay.nameBold || nameBold,
             nameBadge = overlay.nameBadge ?: nameBadge,
             capeResourcePath = overlay.capeResourcePath ?: capeResourcePath,
@@ -396,7 +407,8 @@ object PlayerCustomizationRegistry {
 
         val nameColors = when (entry.style?.mode) {
             ContentManager.LoadedNameStyle.Mode.SOLID,
-            ContentManager.LoadedNameStyle.Mode.GRADIENT -> {
+            ContentManager.LoadedNameStyle.Mode.GRADIENT,
+            ContentManager.LoadedNameStyle.Mode.ANIMATED_GRADIENT -> {
                 val left = entry.style.leftColor ?: return null
                 val right = entry.style.rightColor ?: left
                 NameColors(left = left, right = right)
@@ -423,6 +435,9 @@ object PlayerCustomizationRegistry {
             aliases = entry.aliases,
             nameColors = nameColors,
             nameLetterColors = nameLetterColors,
+            nameAnimated = entry.style?.mode == ContentManager.LoadedNameStyle.Mode.ANIMATED_GRADIENT,
+            nameAnimationSpeed = entry.style?.animationSpeed,
+            nameAnimationSteps = entry.style?.animationSteps,
             nameBold = entry.style?.bold == true,
             nameBadge = badge,
             capeResourcePath = entry.capeResourcePath,

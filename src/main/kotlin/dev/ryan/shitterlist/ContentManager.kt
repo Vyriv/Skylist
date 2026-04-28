@@ -184,7 +184,11 @@ object ContentManager {
             return null
         }
 
-        return when (style.mode.trim().lowercase()) {
+        val normalizedMode = style.mode.trim().lowercase()
+        val animationSpeed = style.animationSpeed?.takeIf { it > 0f }
+        val animationSteps = style.animationSteps?.coerceAtLeast(2)
+
+        return when (normalizedMode) {
             "inherit_rank", "inherit-rank", "inherit" ->
                 LoadedNameStyle(LoadedNameStyle.Mode.INHERIT_RANK, bold = style.bold)
 
@@ -196,7 +200,27 @@ object ContentManager {
             "gradient" -> {
                 val left = parseColor(style.leftColor ?: style.color) ?: return null
                 val right = parseColor(style.rightColor ?: style.color) ?: return null
-                LoadedNameStyle(LoadedNameStyle.Mode.GRADIENT, left, right, style.bold)
+                LoadedNameStyle(
+                    mode = if (animationSpeed != null) LoadedNameStyle.Mode.ANIMATED_GRADIENT else LoadedNameStyle.Mode.GRADIENT,
+                    leftColor = left,
+                    rightColor = right,
+                    bold = style.bold,
+                    animationSpeed = animationSpeed,
+                    animationSteps = animationSteps,
+                )
+            }
+
+            "animated_gradient", "animated-gradient", "animatedgradient" -> {
+                val left = parseColor(style.leftColor ?: style.color) ?: return null
+                val right = parseColor(style.rightColor ?: style.color) ?: return null
+                LoadedNameStyle(
+                    mode = LoadedNameStyle.Mode.ANIMATED_GRADIENT,
+                    leftColor = left,
+                    rightColor = right,
+                    bold = style.bold,
+                    animationSpeed = animationSpeed,
+                    animationSteps = animationSteps,
+                )
             }
 
             "multicolor" -> {
@@ -407,11 +431,14 @@ object ContentManager {
         val rightColor: Int? = null,
         val bold: Boolean = false,
         val letterColors: List<Int>? = null,
+        val animationSpeed: Float? = null,
+        val animationSteps: Int? = null,
     ) {
         enum class Mode {
             INHERIT_RANK,
             SOLID,
             GRADIENT,
+            ANIMATED_GRADIENT,
             MULTICOLOR,
         }
     }
@@ -468,6 +495,8 @@ object ContentManager {
         var leftColor: String? = null,
         var rightColor: String? = null,
         var letterColors: MutableList<String>? = null,
+        var animationSpeed: Float? = null,
+        var animationSteps: Int? = null,
         var bold: Boolean = false,
     )
 

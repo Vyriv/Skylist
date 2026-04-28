@@ -24,6 +24,9 @@ public abstract class EntityMixin {
         if (current == null) {
             return;
         }
+        if (NameStyler.INSTANCE.containsAnimatedStyledTargetName(current.getString())) {
+            return;
+        }
 
         Text styled = NameStyler.INSTANCE.applyNameplateDecorations(current);
         if (styled != current) {

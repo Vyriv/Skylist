@@ -472,7 +472,7 @@ object UiLayoutManager {
         val tagPicker: CenteredPanelLayout = CenteredPanelLayout(width = 372, height = 236),
         val shareCode: CenteredPanelLayout = CenteredPanelLayout(width = 420, height = 168),
         val entryProfile: CenteredPanelLayout = CenteredPanelLayout(width = 496, height = 336),
-        val scammerSettings: CenteredPanelLayout = CenteredPanelLayout(width = 420, height = 352),
+        val scammerSettings: CenteredPanelLayout = CenteredPanelLayout(width = 500, height = 282),
     )
 
     data class CenteredPanelLayout(

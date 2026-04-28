@@ -26,6 +26,7 @@ class PartyListener(
     private val members = ConcurrentHashMap.newKeySet<String>()
     private val recentMessages = ConcurrentHashMap<String, Long>()
     private val recentScammerHits = ConcurrentHashMap<String, Long>()
+    private val kickQueue = KickQueue(client, ::isMemberPresent)
 
     fun register() {
         ClientReceiveMessageEvents.GAME.register { message, overlay ->
@@ -42,6 +43,7 @@ class PartyListener(
         members.clear()
         recentMessages.clear()
         recentScammerHits.clear()
+        kickQueue.clear()
     }
 
     fun isMemberPresent(username: String): Boolean = members.contains(username.lowercase(Locale.ROOT))
@@ -56,6 +58,7 @@ class PartyListener(
 
     private fun handleIncomingText(message: Text) {
         val raw = message.string.trim()
+        kickQueue.handleChatMessage(raw)
         if (raw.isEmpty() || isRecentDuplicate(raw)) {
             return
         }
@@ -70,7 +73,7 @@ class PartyListener(
             partyFinderJoinedRegex.matches(raw) -> {
                 val username = partyFinderJoinedRegex.matchEntire(raw)?.groupValues?.get(1) ?: return
                 members.add(username.lowercase(Locale.ROOT))
-                queueAutoScammerCheck(username, ScammerCheckService.CheckSource.PARTY_JOIN)
+                queueAutoScammerCheck(username, ScammerCheckService.CheckSource.PARTY_FINDER)
             }
 
             leftRegex.matches(raw) -> {
@@ -173,6 +176,16 @@ class PartyListener(
     }
 
     private fun handleRemoteScammerHit(result: ScammerCheckService.CheckResult, tradePopup: Boolean) {
+        val action = result.recommendedAction
+        if (action == ScammerListManager.ScammerRecommendedAction.NONE) {
+            ThrowerListMod.logger.debug(
+                "Scammer hit kept log-only for {}: score={}, reason={}",
+                result.username,
+                result.severityResult?.score,
+                result.reason,
+            )
+            return
+        }
         if (!shouldShowScammerHit(result, tradePopup)) {
             return
         }
@@ -181,12 +194,40 @@ class PartyListener(
         if (ConfigManager.isAnnounceScammerHitsEnabled()) {
             client.player?.networkHandler?.sendChatCommand("pc [SL] ${result.username} is on the ${result.sourceLabel} list for \"${result.reason}\"")
         }
-        if (tradePopup && ConfigManager.isTradeScammerPopupEnabled()) {
-            client.setScreen(ScammerWarningScreen(client.currentScreen, result.username, "the ${result.sourceLabel} list", result.reason, result.caseTimeMillis))
+        if (shouldShowPopup(result, tradePopup)) {
+            client.setScreen(
+                ScammerWarningScreen(
+                    parent = client.currentScreen,
+                    username = result.username,
+                    listPhrase = "the ${result.sourceLabel} list",
+                    reason = result.reason,
+                    caseTimeMillis = result.caseTimeMillis,
+                    severity = result.severity,
+                    score = result.severityResult?.score,
+                    recommendedAction = action,
+                    continueCommand = if (tradePopup) "trade ${result.username}" else null,
+                ),
+            )
+        }
+
+        if (shouldAutokick(result)) {
+            val entry = result.entry ?: return
+            kickQueue.enqueue(
+                KickQueue.KickTarget(
+                    username = result.username,
+                    uuid = entry.uuid,
+                    reason = result.reason,
+                    isRemote = true,
+                    partyMessage = "[SL] ${result.username} is on the ${result.sourceLabel} list (${result.severity?.label}, score ${formatScore(result.severityResult?.score)})",
+                ),
+            )
         }
     }
 
     private fun shouldShowScammerHit(result: ScammerCheckService.CheckResult, tradePopup: Boolean): Boolean {
+        if (!shouldWarn(result)) {
+            return false
+        }
         if (tradePopup) {
             return true
         }
@@ -203,12 +244,63 @@ class PartyListener(
             val color = result.severityColor ?: Formatting.RED.colorValue ?: 0xFF5555
             style.withColor(color and 0xFFFFFF)
         }
+        val prefix = when (result.recommendedAction) {
+            ScammerListManager.ScammerRecommendedAction.SUBTLE_WARN -> "[SL][Notice] "
+            ScammerListManager.ScammerRecommendedAction.WARN -> "[SL][Warn] "
+            ScammerListManager.ScammerRecommendedAction.KICK_RECOMMENDED -> "[SL][Kick] "
+            ScammerListManager.ScammerRecommendedAction.AUTO_KICK_ALLOWED -> "[SL][AutoKick] "
+            ScammerListManager.ScammerRecommendedAction.NONE -> "[SL] "
+        }
+        val scoreSuffix = result.severityResult?.score?.let { " (${result.severity?.label ?: "Unknown"} ${formatScore(it)})" }.orEmpty()
         return Text.empty()
-            .append(Text.literal("[SL] ").formatted(Formatting.AQUA))
+            .append(Text.literal(prefix).formatted(Formatting.AQUA))
             .append(usernameText)
             .append(Text.literal(" is on the ${result.sourceLabel} list for ").formatted(Formatting.RED))
             .append(Text.literal("\"${result.reason}\"").formatted(Formatting.GRAY))
+            .append(Text.literal(scoreSuffix).formatted(Formatting.YELLOW))
     }
+
+    private fun shouldWarn(result: ScammerCheckService.CheckResult): Boolean {
+        val severity = result.severity ?: return false
+        return severity.priority >= ConfigManager.getScammerWarningThreshold().priority
+    }
+
+    private fun shouldShowPopup(result: ScammerCheckService.CheckResult, tradePopup: Boolean): Boolean {
+        val action = result.recommendedAction
+        if (tradePopup) {
+            return ConfigManager.isTradeScammerPopupEnabled() && shouldWarn(result)
+        }
+        return shouldWarn(result) && when (action) {
+            ScammerListManager.ScammerRecommendedAction.WARN,
+            ScammerListManager.ScammerRecommendedAction.KICK_RECOMMENDED,
+            ScammerListManager.ScammerRecommendedAction.AUTO_KICK_ALLOWED,
+            -> true
+
+            else -> false
+        }
+    }
+
+    private fun shouldAutokick(result: ScammerCheckService.CheckResult): Boolean {
+        if (!ConfigManager.isScammerAutokickEnabled() || ConfigManager.isScammerOnlyNotifyEnabled()) {
+            return false
+        }
+        if (result.checkSource == ScammerCheckService.CheckSource.TRADE || result.checkSource == ScammerCheckService.CheckSource.SLASH_COMMAND || result.checkSource == ScammerCheckService.CheckSource.PREFIX_COMMAND) {
+            return false
+        }
+        val severity = result.severity ?: return false
+        if (severity.priority < ScammerListManager.ScammerSeverity.HIGH.priority) {
+            return false
+        }
+        if (result.recommendedAction != ScammerListManager.ScammerRecommendedAction.AUTO_KICK_ALLOWED) {
+            return false
+        }
+        return severity.priority >= ConfigManager.getScammerAutokickThreshold().priority
+    }
+
+    private fun formatScore(value: Double?): String =
+        value?.let {
+            if (it % 1.0 == 0.0) it.toLong().toString() else String.format("%.2f", it).trimEnd('0').trimEnd('.')
+        } ?: "?"
 
     private fun parsePartySection(section: String) {
         usernameRegex.findAll(section)

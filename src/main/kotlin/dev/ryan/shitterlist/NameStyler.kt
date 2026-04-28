@@ -1,6 +1,7 @@
 package dev.ryan.throwerlist
 
 import com.mojang.authlib.GameProfile
+import net.minecraft.client.MinecraftClient
 import net.minecraft.text.MutableText
 import net.minecraft.text.OrderedText
 import net.minecraft.text.StringVisitable
@@ -11,13 +12,21 @@ import java.util.LinkedHashMap
 import java.util.Locale
 import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.LongAdder
+import kotlin.math.floor
 
 object NameStyler {
     private const val legacyFormat = '\u00A7'
+    private const val animatedGradientSteps = 64
+    private const val animatedGradientSpeed = 1.0f
     private const val textCacheLimit = 512
     private const val stringCacheLimit = 1024
     private const val matchCacheLimit = 2048
     private const val identityCacheSize = 2048
+    private const val debugLogIntervalMillis = 750L
+    private const val largeLobbyAnimationThreshold = 40
+    private const val throttledAnimationFps = 15.0
 
     private enum class TransformKind {
         GRADIENT_TEXT,
@@ -36,6 +45,13 @@ object NameStyler {
         val colors: List<Int>,
     )
 
+    private data class AnimatedGradientCacheKey(
+        val leftColor: Int,
+        val rightColor: Int,
+        val stepsCount: Int,
+        val speedBits: Int,
+    )
+
     private data class StyledSegment(
         val text: String,
         val style: Style,
@@ -46,6 +62,88 @@ object NameStyler {
         val end: Int,
         val text: String,
         val style: Style,
+    )
+
+    private data class ResolvedOrderedMatch(
+        val start: Int,
+        val end: Int,
+        val content: String,
+        val baseStyle: Style,
+        val customization: PlayerCustomizationRegistry.PlayerCustomization,
+        val animatedStyle: AnimatedGradientStyle?,
+        val isAnimatedGradient: Boolean,
+        val hasBadge: Boolean,
+        val hasDecorations: Boolean,
+        val hasExplicitNameColors: Boolean,
+        val hasBadgeAlready: Boolean,
+        val hasTrailingContent: Boolean,
+    )
+
+    private data class OrderedTextTransformPlan(
+        val matches: List<ResolvedOrderedMatch>,
+        val hasAnimatedGradient: Boolean,
+    )
+
+    private data class OrderedTextSourceData(
+        val plain: String,
+        val characterCount: Int,
+        val runs: List<StyledRun>,
+        val styleHash: Int,
+        val gradientPlan: OrderedTextTransformPlan?,
+        val nameplatePlan: OrderedTextTransformPlan?,
+        val scoreboardPlan: OrderedTextTransformPlan?,
+    ) {
+        fun planFor(kind: TransformKind): OrderedTextTransformPlan? =
+            when (kind) {
+                TransformKind.GRADIENT_TEXT -> gradientPlan
+                TransformKind.NAMEPLATE_TEXT -> nameplatePlan
+                TransformKind.SCOREBOARD_TEXT -> scoreboardPlan
+                else -> null
+            }
+    }
+
+    private data class OrderedTextSourceLookup(
+        val data: OrderedTextSourceData,
+        val cacheUsed: Boolean,
+    )
+
+    private data class OrderedTextPlanCacheKey(
+        val version: Long,
+        val kind: TransformKind,
+        val plain: String,
+        val styleHash: Int,
+    )
+
+    private data class OrderedTextPlanCacheValue(
+        val plan: OrderedTextTransformPlan?,
+    )
+
+    private data class OrderedTextResultCacheKey(
+        val version: Long,
+        val kind: TransformKind,
+        val plain: String,
+        val styleHash: Int,
+    )
+
+    private data class OrderedTextAnimatedFrameCacheKey(
+        val base: OrderedTextResultCacheKey,
+        val frameIndex: Long,
+    )
+
+    data class DebugTransformMetadata(
+        val kind: String,
+        val renderPath: String,
+        val matchedPlayer: String?,
+        val styleMode: String,
+        val animated: Boolean,
+        val worldTime: Long,
+        val animationTime: Double,
+        val animationOffset: Float,
+        val finalOrderedTextCacheUsed: Boolean,
+        val sourceDataCacheUsed: Boolean,
+        val resultIdentityHash: Int,
+        val resultHash: Int,
+        val resultText: String,
     )
 
     private data class NameMatch(
@@ -81,6 +179,22 @@ object NameStyler {
         val version: Long,
         val name: String,
     )
+
+    private class DebugCounters {
+        val orderedTextCalls = LongAdder()
+        val planCacheHits = LongAdder()
+        val planCacheMisses = LongAdder()
+        val finalStaticCacheHits = LongAdder()
+        val finalStaticCacheMisses = LongAdder()
+        val animatedFrameCacheHits = LongAdder()
+        val animatedFrameCacheMisses = LongAdder()
+        val sourceCacheHits = LongAdder()
+        val sourceCacheMisses = LongAdder()
+        val asOrderedTextCalls = LongAdder()
+        val buildPlanCalls = LongAdder()
+        val hudCacheHits = LongAdder()
+        val hudCacheMisses = LongAdder()
+    }
 
     private class LruCache<K, V>(private val maxEntries: Int) : LinkedHashMap<K, V>(maxEntries, 0.75f, true) {
         @Synchronized
@@ -163,6 +277,7 @@ object NameStyler {
 
     private val cacheLock = Any()
     private val componentCache = ConcurrentHashMap<ColorizedCacheKey, Text>()
+    private val animatedGradientCache = ConcurrentHashMap<AnimatedGradientCacheKey, AnimatedGradientStyle>()
     // Name/text hooks run from HUD, scoreboard, nametag, tab, and TextRenderer paths.
     // These caches are bounded or fixed-size and explicitly cleared whenever
     // PlayerCustomizationRegistry.version changes.
@@ -170,6 +285,10 @@ object NameStyler {
     private val textTransformCache = LruCache<TextCacheKey, Text>(textCacheLimit)
     private val stringTransformCache = LruCache<StringCacheKey, String>(stringCacheLimit)
     private val matchCache = LruCache<MatchCacheKey, Boolean>(matchCacheLimit)
+    private val orderedTextPlanCache = LruCache<OrderedTextPlanCacheKey, OrderedTextPlanCacheValue>(matchCacheLimit)
+    private val orderedTextStaticResultCache = LruCache<OrderedTextResultCacheKey, OrderedText>(textCacheLimit)
+    private val orderedTextAnimatedFrameCache = LruCache<OrderedTextAnimatedFrameCacheKey, OrderedText>(matchCacheLimit)
+    private val loggedAnimatedPaths = ConcurrentHashMap.newKeySet<String>()
     private val gradientTextIdentityCache = IdentityCache<Text, Text>(identityCacheSize)
     private val nameplateTextIdentityCache = IdentityCache<Text, Text>(identityCacheSize)
     private val scoreboardTextIdentityCache = IdentityCache<Text, Text>(identityCacheSize)
@@ -178,17 +297,34 @@ object NameStyler {
     private val gradientOrderedTextIdentityCache = IdentityCache<OrderedText, OrderedText>(identityCacheSize)
     private val nameplateOrderedTextIdentityCache = IdentityCache<OrderedText, OrderedText>(identityCacheSize)
     private val scoreboardOrderedTextIdentityCache = IdentityCache<OrderedText, OrderedText>(identityCacheSize)
+    private val orderedTextSourceCache = IdentityCache<OrderedText, OrderedTextSourceData>(identityCacheSize)
+    private val debugLogTimes = ConcurrentHashMap<String, Long>()
+    private val debugCounters = DebugCounters()
+    private val debugCounterLastLog = AtomicLong(0L)
 
     @Volatile
     private var observedRegistryVersion = Long.MIN_VALUE
+    private val activeRenderPath = ThreadLocal<TransformKind?>()
+    private val lastDebugTransform = ThreadLocal<DebugTransformMetadata?>()
+
+    @Volatile
+    private var animatedNameDebugEnabled = false
+
+    @Volatile
+    private var forceAnimatedNameUncached = false
 
     fun clearCaches() {
         synchronized(cacheLock) {
             componentCache.clear()
+            animatedGradientCache.clear()
             selfNameCache.clearCache()
             textTransformCache.clearCache()
             stringTransformCache.clearCache()
             matchCache.clearCache()
+            orderedTextPlanCache.clearCache()
+            orderedTextStaticResultCache.clearCache()
+            orderedTextAnimatedFrameCache.clearCache()
+            loggedAnimatedPaths.clear()
             gradientTextIdentityCache.clear()
             nameplateTextIdentityCache.clear()
             scoreboardTextIdentityCache.clear()
@@ -197,6 +333,8 @@ object NameStyler {
             gradientOrderedTextIdentityCache.clear()
             nameplateOrderedTextIdentityCache.clear()
             scoreboardOrderedTextIdentityCache.clear()
+            orderedTextSourceCache.clear()
+            debugLogTimes.clear()
             observedRegistryVersion = PlayerCustomizationRegistry.version
         }
     }
@@ -207,10 +345,15 @@ object NameStyler {
             synchronized(cacheLock) {
                 if (observedRegistryVersion != version) {
                     componentCache.clear()
+                    animatedGradientCache.clear()
                     selfNameCache.clearCache()
                     textTransformCache.clearCache()
                     stringTransformCache.clearCache()
                     matchCache.clearCache()
+                    orderedTextPlanCache.clearCache()
+                    orderedTextStaticResultCache.clearCache()
+                    orderedTextAnimatedFrameCache.clearCache()
+                    loggedAnimatedPaths.clear()
                     gradientTextIdentityCache.clear()
                     nameplateTextIdentityCache.clear()
                     scoreboardTextIdentityCache.clear()
@@ -219,6 +362,8 @@ object NameStyler {
                     gradientOrderedTextIdentityCache.clear()
                     nameplateOrderedTextIdentityCache.clear()
                     scoreboardOrderedTextIdentityCache.clear()
+                    orderedTextSourceCache.clear()
+                    debugLogTimes.clear()
                     observedRegistryVersion = version
                 }
             }
@@ -235,8 +380,48 @@ object NameStyler {
     fun hasStyledProfile(profile: GameProfile?): Boolean =
         PlayerCustomizationRegistry.find(profile)?.hasNameCustomization() == true
 
+    fun hasAnimatedStyledProfile(profile: GameProfile?): Boolean =
+        PlayerCustomizationRegistry.find(profile)?.hasAnimatedGradient() == true
+
     fun hasStyledName(name: String?): Boolean =
         PlayerCustomizationRegistry.findByName(name)?.hasNameCustomization() == true
+
+    fun containsAnimatedStyledTargetName(text: String?): Boolean =
+        !text.isNullOrEmpty() && hasAnimatedGradientMatch(text, PlayerCustomizationRegistry.styledNameCandidates)
+
+    fun setAnimatedNameDebugEnabled(enabled: Boolean): Boolean {
+        animatedNameDebugEnabled = enabled
+        if (!enabled) {
+            lastDebugTransform.remove()
+            debugLogTimes.clear()
+        }
+        return enabled
+    }
+
+    fun isAnimatedNameDebugEnabled(): Boolean = animatedNameDebugEnabled
+
+    fun setForceAnimatedNameUncached(enabled: Boolean): Boolean {
+        forceAnimatedNameUncached = enabled
+        return enabled
+    }
+
+    fun isForceAnimatedNameUncached(): Boolean = forceAnimatedNameUncached
+
+    fun hasAnimatedGradientInOrderedText(text: OrderedText): Boolean {
+        val version = currentRegistryVersion()
+        return orderedTextSource(text, version).data.gradientPlan?.hasAnimatedGradient == true
+    }
+
+    fun currentOrderedTextAnimationFrameIndex(): Long =
+        currentAnimationFrameIndex(currentAnimationTime()) ?: Long.MIN_VALUE
+
+    fun recordHudOrderedTextCacheHit() {
+        incrementDebugCounter(debugCounters.hudCacheHits)
+    }
+
+    fun recordHudOrderedTextCacheMiss() {
+        incrementDebugCounter(debugCounters.hudCacheMisses)
+    }
 
     fun hasExplicitNameColors(name: String?): Boolean =
         PlayerCustomizationRegistry.findByName(name)?.hasExplicitNameColors() == true
@@ -330,23 +515,28 @@ object NameStyler {
     fun applyGradientToVisitable(message: StringVisitable): StringVisitable = rebuildVisitable(message)
 
     fun applyGradientToOrderedText(text: OrderedText): OrderedText =
-        applyCachedOrderedTextTransform(text, TransformKind.GRADIENT_TEXT) {
-            rebuildGradientAcrossSegments(it)?.asOrderedText() ?: it
+        applyCachedOrderedTextTransform(text, TransformKind.GRADIENT_TEXT) { source, animationTime ->
+            rebuildOrderedTextFromPlan(source, source.gradientPlan ?: return@applyCachedOrderedTextTransform null, animationTime = animationTime)
         }
 
     fun applyNameplateDecorations(text: OrderedText): OrderedText =
-        applyCachedOrderedTextTransform(text, TransformKind.NAMEPLATE_TEXT) {
-            rebuildOrderedText(it, includeBadges = true)?.asOrderedText() ?: it
+        applyCachedOrderedTextTransform(text, TransformKind.NAMEPLATE_TEXT) { source, animationTime ->
+            rebuildOrderedTextFromPlan(
+                source,
+                source.nameplatePlan ?: return@applyCachedOrderedTextTransform null,
+                includeBadges = true,
+                animationTime = animationTime,
+            )
         }
 
     fun applyScoreboardDecorations(text: OrderedText): OrderedText =
-        applyCachedOrderedTextTransform(text, TransformKind.SCOREBOARD_TEXT) {
-            rebuildDecorationsAcrossSegments(
-                it,
+        applyCachedOrderedTextTransform(text, TransformKind.SCOREBOARD_TEXT) { source, animationTime ->
+            rebuildOrderedTextFromPlan(
+                source,
+                source.scoreboardPlan ?: return@applyCachedOrderedTextTransform null,
                 includeBadges = true,
-                terminalBadgesOnly = true,
-                allowTruncatedPrefix = true,
-            )?.asOrderedText() ?: it
+                animationTime = animationTime,
+            )
         }
 
     fun applyGradientToString(raw: String?): String? {
@@ -359,9 +549,50 @@ object NameStyler {
             return raw
         }
 
+        if (!shouldCacheFinalTransform(TransformKind.GRADIENT_STRING, raw)) {
+            return applyGradientToStringUncached(raw)
+        }
+
         val cacheKey = StringCacheKey(version, TransformKind.GRADIENT_STRING, raw)
         stringTransformCache.getCached(cacheKey)?.let { return it }
+        val output = applyGradientToStringUncached(raw)
 
+        stringTransformCache.putCached(cacheKey, output)
+        return output
+    }
+
+    fun applyDecorationsToString(raw: String?): String? {
+        return applyDecorationsToString(raw, terminalBadgesOnly = false)
+    }
+
+    fun applyScoreboardDecorationsToString(raw: String?): String? {
+        return applyDecorationsToString(raw, terminalBadgesOnly = true)
+    }
+
+    private fun applyDecorationsToString(raw: String?, terminalBadgesOnly: Boolean): String? {
+        if (raw.isNullOrEmpty()) {
+            return raw
+        }
+
+        val kind = if (terminalBadgesOnly) TransformKind.SCOREBOARD_STRING else TransformKind.DECORATED_STRING
+        val version = currentRegistryVersion()
+        if (!containsForKind(raw, kind, version)) {
+            return raw
+        }
+
+        if (!shouldCacheFinalTransform(kind, raw)) {
+            return applyDecorationsToStringUncached(raw, terminalBadgesOnly)
+        }
+
+        val cacheKey = StringCacheKey(version, kind, raw)
+        stringTransformCache.getCached(cacheKey)?.let { return it }
+        val output = applyDecorationsToStringUncached(raw, terminalBadgesOnly)
+
+        stringTransformCache.putCached(cacheKey, output)
+        return output
+    }
+
+    private fun applyGradientToStringUncached(raw: String): String {
         var output: String = raw
         PlayerCustomizationRegistry.entries.forEach { customization ->
             if (!customization.hasNameCustomization() || !customization.hasExplicitNameColors()) {
@@ -393,33 +624,10 @@ object NameStyler {
 
             output = rebuilt.toString()
         }
-
-        stringTransformCache.putCached(cacheKey, output)
         return output
     }
 
-    fun applyDecorationsToString(raw: String?): String? {
-        return applyDecorationsToString(raw, terminalBadgesOnly = false)
-    }
-
-    fun applyScoreboardDecorationsToString(raw: String?): String? {
-        return applyDecorationsToString(raw, terminalBadgesOnly = true)
-    }
-
-    private fun applyDecorationsToString(raw: String?, terminalBadgesOnly: Boolean): String? {
-        if (raw.isNullOrEmpty()) {
-            return raw
-        }
-
-        val kind = if (terminalBadgesOnly) TransformKind.SCOREBOARD_STRING else TransformKind.DECORATED_STRING
-        val version = currentRegistryVersion()
-        if (!containsForKind(raw, kind, version)) {
-            return raw
-        }
-
-        val cacheKey = StringCacheKey(version, kind, raw)
-        stringTransformCache.getCached(cacheKey)?.let { return it }
-
+    private fun applyDecorationsToStringUncached(raw: String, terminalBadgesOnly: Boolean): String {
         var output: String = raw
         PlayerCustomizationRegistry.entries.forEach { customization ->
             if (!customization.hasNameCustomization() || findNameMatch(output, customization) == null) {
@@ -471,8 +679,6 @@ object NameStyler {
 
             output = rebuilt.toString()
         }
-
-        stringTransformCache.putCached(cacheKey, output)
         return output
     }
 
@@ -481,6 +687,10 @@ object NameStyler {
         matchedName: String,
         customization: PlayerCustomizationRegistry.PlayerCustomization,
     ): Text {
+        if (customization.hasAnimatedGradient()) {
+            return appendBadge(cachedGradient(matchedName, customization), customization)
+        }
+
         val cacheKey = SelfNameCacheKey(version, matchedName.lowercase(Locale.ROOT))
         selfNameCache.getCached(cacheKey)?.let { return it }
 
@@ -495,13 +705,29 @@ object NameStyler {
         transform: (Text) -> Text,
     ): Text {
         val version = currentRegistryVersion()
-        textIdentityCache(kind).get(message)?.let { return it }
-
         val plain = message.string
         if (!containsForKind(plain, kind, version)) {
+            textIdentityCache(kind).get(message)?.let { return it }
             cacheTextIdentity(kind, message, message)
             return message
         }
+
+        val animated = hasAnimatedGradientMatch(plain, candidatesForKind(kind))
+        if (animated || forceAnimatedNameUncached) {
+            val transformed = withRenderPath(kind) { transform(message) }
+            publishDebugTransform(
+                kind = kind,
+                sourceText = plain,
+                resultText = transformed.string,
+                resultIdentityHash = System.identityHashCode(transformed),
+                resultHash = transformed.string.hashCode(),
+                finalOrderedTextCacheUsed = false,
+                sourceDataCacheUsed = false,
+            )
+            return transformed
+        }
+
+        textIdentityCache(kind).get(message)?.let { return it }
 
         val runs = collectRuns(message)
         val cacheKey = TextCacheKey(version, kind, runsToPlain(runs), styleHash(runs))
@@ -510,46 +736,79 @@ object NameStyler {
             return cached
         }
 
-        val transformed = transform(message)
+        val transformed = withRenderPath(kind) { transform(message) }
         if (transformed !== message) {
             textTransformCache.putCached(cacheKey, transformed)
             cacheTextIdentity(kind, transformed, transformed)
         }
         cacheTextIdentity(kind, message, transformed)
+        clearDebugTransform()
         return transformed
     }
 
     private fun applyCachedOrderedTextTransform(
         text: OrderedText,
         kind: TransformKind,
-        transform: (OrderedText) -> OrderedText,
+        transform: (OrderedTextSourceData, Double) -> Text?,
     ): OrderedText {
+        incrementDebugCounter(debugCounters.orderedTextCalls)
         val version = currentRegistryVersion()
-        orderedTextIdentityCache(kind).get(text)?.let { return it }
-
-        val runs = collectRuns(text)
-        val plain = runsToPlain(runs)
-        if (!containsForKind(plain, kind, version)) {
-            cacheOrderedTextIdentity(kind, text, text)
+        val bypassSourceCache = forceAnimatedNameUncached
+        val sourceLookup = orderedTextSource(text, version, bypassSourceCache)
+        val source = sourceLookup.data
+        val plan = source.planFor(kind)
+        if (plan == null) {
             return text
         }
 
-        val cacheKey = TextCacheKey(version, kind, plain, styleHash(runs))
-        textTransformCache.getCached(cacheKey)?.let { cached ->
-            val ordered = cached.asOrderedText()
-            cacheOrderedTextIdentity(kind, text, ordered)
-            cacheOrderedTextIdentity(kind, ordered, ordered)
-            return ordered
+        val resultCacheKey = OrderedTextResultCacheKey(version, kind, source.plain, source.styleHash)
+        val animationTime = if (plan.hasAnimatedGradient) currentAnimationTime() else 0.0
+        val frameIndex = if (plan.hasAnimatedGradient && !forceAnimatedNameUncached) {
+            currentAnimationFrameIndex(animationTime)
+        } else {
+            null
         }
 
-        val transformed = transform(text)
-        if (transformed !== text) {
-            val transformedRuns = collectRuns(transformed)
-            textTransformCache.putCached(cacheKey, runsToText(transformedRuns))
-            cacheOrderedTextIdentity(kind, transformed, transformed)
+        if (!plan.hasAnimatedGradient && !forceAnimatedNameUncached) {
+            orderedTextStaticResultCache.getCached(resultCacheKey)?.let { cached ->
+                incrementDebugCounter(debugCounters.finalStaticCacheHits)
+                return cached
+            }
+            incrementDebugCounter(debugCounters.finalStaticCacheMisses)
+        } else if (frameIndex != null) {
+            orderedTextAnimatedFrameCache.getCached(OrderedTextAnimatedFrameCacheKey(resultCacheKey, frameIndex))?.let { cached ->
+                incrementDebugCounter(debugCounters.animatedFrameCacheHits)
+                return cached
+            }
+            incrementDebugCounter(debugCounters.animatedFrameCacheMisses)
         }
-        cacheOrderedTextIdentity(kind, text, transformed)
-        return transformed
+
+        val transformed = withRenderPath(kind) { transform(source, animationTime) }
+        if (transformed == null) {
+            return text
+        }
+
+        incrementDebugCounter(debugCounters.asOrderedTextCalls)
+        val ordered = transformed.asOrderedText()
+        if (!bypassSourceCache) {
+            orderedTextSourceCache.put(ordered, source)
+        }
+        if (!plan.hasAnimatedGradient && !forceAnimatedNameUncached) {
+            orderedTextStaticResultCache.putCached(resultCacheKey, ordered)
+        } else if (frameIndex != null) {
+            orderedTextAnimatedFrameCache.putCached(OrderedTextAnimatedFrameCacheKey(resultCacheKey, frameIndex), ordered)
+        }
+        publishDebugTransform(
+            kind = kind,
+            sourceText = source.plain,
+            resultText = transformed.string,
+            resultIdentityHash = System.identityHashCode(ordered),
+            resultHash = source.styleHash,
+            finalOrderedTextCacheUsed = false,
+            sourceDataCacheUsed = sourceLookup.cacheUsed,
+            plan = plan,
+        )
+        return ordered
     }
 
     private fun textIdentityCache(kind: TransformKind): IdentityCache<Text, Text> =
@@ -664,6 +923,147 @@ object NameStyler {
             output.append(Text.literal(run.text).setStyle(run.style))
         }
         return output
+    }
+
+    private fun orderedTextSource(
+        text: OrderedText,
+        version: Long,
+        bypassCache: Boolean = false,
+    ): OrderedTextSourceLookup {
+        if (!bypassCache) {
+            orderedTextSourceCache.get(text)?.let {
+                incrementDebugCounter(debugCounters.sourceCacheHits)
+                return OrderedTextSourceLookup(it, true)
+            }
+        }
+        incrementDebugCounter(debugCounters.sourceCacheMisses)
+
+        val runs = collectRuns(text)
+        val plain = runsToPlain(runs)
+        val styleHash = styleHash(runs)
+        val source = OrderedTextSourceData(
+            plain = plain,
+            characterCount = plain.length,
+            runs = runs,
+            styleHash = styleHash,
+            gradientPlan = orderedTextPlan(version, runs, plain, styleHash, TransformKind.GRADIENT_TEXT),
+            nameplatePlan = orderedTextPlan(version, runs, plain, styleHash, TransformKind.NAMEPLATE_TEXT),
+            scoreboardPlan = orderedTextPlan(version, runs, plain, styleHash, TransformKind.SCOREBOARD_TEXT),
+        )
+        if (!bypassCache) {
+            orderedTextSourceCache.put(text, source)
+        }
+        return OrderedTextSourceLookup(source, false)
+    }
+
+    private fun orderedTextPlan(
+        version: Long,
+        runs: List<StyledRun>,
+        plain: String,
+        styleHash: Int,
+        kind: TransformKind,
+    ): OrderedTextTransformPlan? {
+        val cacheKey = OrderedTextPlanCacheKey(version, kind, plain, styleHash)
+        orderedTextPlanCache.getCached(cacheKey)?.let {
+            incrementDebugCounter(debugCounters.planCacheHits)
+            return it.plan
+        }
+        incrementDebugCounter(debugCounters.planCacheMisses)
+        incrementDebugCounter(debugCounters.buildPlanCalls)
+        val plan = buildOrderedTextPlan(runs, plain, kind)
+        orderedTextPlanCache.putCached(cacheKey, OrderedTextPlanCacheValue(plan))
+        return plan
+    }
+
+    private fun buildOrderedTextPlan(
+        runs: List<StyledRun>,
+        plain: String,
+        kind: TransformKind,
+    ): OrderedTextTransformPlan? {
+        val candidates = candidatesForKind(kind)
+        if (plain.isEmpty() || candidates.isEmpty()) {
+            return null
+        }
+
+        val includeBadges = kind != TransformKind.GRADIENT_TEXT
+        val terminalBadgesOnly = kind == TransformKind.SCOREBOARD_TEXT
+        val matches = mutableListOf<ResolvedOrderedMatch>()
+        var hasAnimatedGradient = false
+        var index = 0
+
+        while (index < plain.length) {
+            val match = findFirstNameMatch(plain, candidates, index) ?: break
+            val customization = match.customization
+            val start = match.nameMatch.index
+            val end = start + match.nameMatch.matchedName.length
+            val isAnimatedGradient = customization.hasAnimatedGradient()
+            val badgeText = customization.nameBadge?.text
+            matches.add(
+                ResolvedOrderedMatch(
+                    start = start,
+                    end = end,
+                    content = plain.substring(start, end),
+                    baseStyle = styleAt(runs, start),
+                    customization = customization,
+                    animatedStyle = resolveAnimatedGradientStyle(customization),
+                    isAnimatedGradient = isAnimatedGradient,
+                    hasBadge = customization.hasBadge,
+                    hasDecorations = customization.hasDecorations,
+                    hasExplicitNameColors = customization.explicitNameColors,
+                    hasBadgeAlready = includeBadges && badgeText != null && hasPlainBadgeImmediatelyAfter(plain, end, badgeText),
+                    hasTrailingContent = terminalBadgesOnly && hasPlainVisibleContentAfter(plain, end),
+                ),
+            )
+            hasAnimatedGradient = hasAnimatedGradient || isAnimatedGradient
+            index = end
+        }
+
+        return matches.takeIf { it.isNotEmpty() }?.let {
+            OrderedTextTransformPlan(matches = it, hasAnimatedGradient = hasAnimatedGradient)
+        }
+    }
+
+    private fun rebuildOrderedTextFromPlan(
+        source: OrderedTextSourceData,
+        plan: OrderedTextTransformPlan,
+        includeBadges: Boolean = false,
+        animationTime: Double = 0.0,
+    ): Text {
+        val rebuilt = Text.empty()
+        var index = 0
+
+        plan.matches.forEach { match ->
+            if (match.start > index) {
+                appendOriginalRange(rebuilt, source.runs, index, match.start)
+            }
+
+            val styledName = when {
+                match.hasExplicitNameColors -> styledMatchText(match, animationTime)
+                else -> buildOriginalRangeText(source.runs, match.start, match.end)
+            }
+
+            if (includeBadges && match.hasBadge && !match.hasBadgeAlready && !match.hasTrailingContent) {
+                rebuilt.append(appendBadge(styledName, match.customization, match.baseStyle))
+            } else {
+                rebuilt.append(styledName)
+            }
+            index = match.end
+        }
+
+        if (index < source.characterCount) {
+            appendOriginalRange(rebuilt, source.runs, index, source.characterCount)
+        }
+
+        return rebuilt
+    }
+
+    private fun styledMatchText(match: ResolvedOrderedMatch, animationTime: Double): Text {
+        val effectiveBaseStyle = applyCustomNameStyle(match.baseStyle, match.customization)
+        if (match.isAnimatedGradient) {
+            val animatedStyle = match.animatedStyle ?: return Text.literal(match.content).setStyle(effectiveBaseStyle)
+            return gradientText(match.content, animatedStyle, effectiveBaseStyle, animationTime)
+        }
+        return cachedGradient(match.content, match.customization, match.baseStyle)
     }
 
     private fun rebuildVisitable(
@@ -1386,12 +1786,97 @@ object NameStyler {
     private fun hasNameCustomization(customization: PlayerCustomizationRegistry.PlayerCustomization): Boolean =
         customization.hasNameCustomization()
 
+    private fun PlayerCustomizationRegistry.PlayerCustomization.hasAnimatedGradient(): Boolean =
+        nameAnimated && nameColors?.let { it.left != it.right } == true
+
+    private inline fun <T> withRenderPath(kind: TransformKind, action: () -> T): T {
+        val previous = activeRenderPath.get()
+        activeRenderPath.set(kind)
+        return try {
+            action()
+        } finally {
+            if (previous == null) {
+                activeRenderPath.remove()
+            } else {
+                activeRenderPath.set(previous)
+            }
+        }
+    }
+
+    private fun shouldCacheFinalTransform(kind: TransformKind, text: String): Boolean =
+        !hasAnimatedGradientMatch(text, candidatesForKind(kind))
+
+    private fun candidatesForKind(kind: TransformKind): List<PlayerCustomizationRegistry.NameCandidate> =
+        when (kind) {
+            TransformKind.GRADIENT_TEXT,
+            TransformKind.GRADIENT_STRING,
+            TransformKind.CHAT_HEADER_TEXT -> PlayerCustomizationRegistry.gradientNameCandidates
+
+            TransformKind.NAMEPLATE_TEXT,
+            TransformKind.DECORATED_STRING -> PlayerCustomizationRegistry.styledNameCandidates
+
+            TransformKind.SCOREBOARD_TEXT,
+            TransformKind.SCOREBOARD_STRING -> PlayerCustomizationRegistry.scoreboardStyledNameCandidates
+
+            TransformKind.SIDEBAR_TEXT -> PlayerCustomizationRegistry.scoreboardGradientNameCandidates
+        }
+
+    private fun hasAnimatedGradientMatch(
+        text: String,
+        candidates: List<PlayerCustomizationRegistry.NameCandidate>,
+    ): Boolean {
+        if (text.isEmpty() || candidates.isEmpty()) {
+            return false
+        }
+
+        var index = 0
+        while (index < text.length) {
+            val match = findFirstNameMatch(text, candidates, index) ?: return false
+            if (match.customization.hasAnimatedGradient()) {
+                return true
+            }
+            index = match.nameMatch.index + match.nameMatch.matchedName.length
+        }
+        return false
+    }
+
+    private fun resolveAnimatedGradientStyle(
+        customization: PlayerCustomizationRegistry.PlayerCustomization,
+    ): AnimatedGradientStyle? {
+        val colors = customization.nameColors ?: return null
+        if (!customization.hasAnimatedGradient()) {
+            return null
+        }
+
+        val stepsCount = customization.nameAnimationSteps ?: animatedGradientSteps
+        val speed = customization.nameAnimationSpeed ?: animatedGradientSpeed
+        return animatedGradientCache.computeIfAbsent(
+            AnimatedGradientCacheKey(colors.left, colors.right, stepsCount, speed.toRawBits()),
+        ) {
+            AnimatedGradientStyle(
+                steps = AnimatedGradientStyle.buildLoopGradient(colors.left, colors.right, stepsCount),
+                speed = speed,
+            )
+        }
+    }
+
     private fun cachedGradient(
         content: String,
         customization: PlayerCustomizationRegistry.PlayerCustomization,
         baseStyle: Style = Style.EMPTY,
     ): Text {
         val effectiveBaseStyle = applyCustomNameStyle(baseStyle, customization)
+        customization.nameColors?.let { colors ->
+            if (!customization.hasAnimatedGradient()) {
+                return staticGradientText(content, colors, effectiveBaseStyle)
+            }
+
+            val animatedStyle = resolveAnimatedGradientStyle(customization)
+                ?: return Text.literal(content).setStyle(effectiveBaseStyle)
+            logAnimatedRender(content, customization)
+            return gradientText(content, animatedStyle, effectiveBaseStyle, currentAnimationTime())
+        }
+
         val key = when {
             !customization.nameLetterColors.isNullOrEmpty() -> ColorizedCacheKey(
                 content = content.lowercase(Locale.ROOT),
@@ -1399,21 +1884,10 @@ object NameStyler {
                 colors = customization.nameLetterColors,
             )
 
-            customization.nameColors != null -> ColorizedCacheKey(
-                content = content.lowercase(Locale.ROOT),
-                kind = "gradient",
-                colors = listOf(customization.nameColors.left, customization.nameColors.right),
-            )
-
             else -> return Text.literal(content).setStyle(effectiveBaseStyle)
         }
 
-        val cached = componentCache.computeIfAbsent(key) {
-            when (key.kind) {
-                "multicolor" -> multiColorText(content, key.colors, Style.EMPTY)
-                else -> gradientText(content, key.colors[0], key.colors[1], Style.EMPTY)
-            }
-        }
+        val cached = componentCache.computeIfAbsent(key) { multiColorText(content, key.colors, Style.EMPTY) }
 
         if (effectiveBaseStyle.isEmpty) {
             return cached.copy()
@@ -1439,13 +1913,44 @@ object NameStyler {
         return text
     }
 
-    private fun gradientText(content: String, leftColor: Int, rightColor: Int, baseStyle: Style): Text {
+    private fun staticGradientText(
+        content: String,
+        colors: PlayerCustomizationRegistry.NameColors,
+        baseStyle: Style,
+    ): Text {
+        val key = ColorizedCacheKey(
+            content = content.lowercase(Locale.ROOT),
+            kind = "gradient:${colors.left}:${colors.right}",
+            colors = listOf(colors.left, colors.right),
+        )
+        val cached = componentCache.computeIfAbsent(key) {
+            val text = Text.empty()
+            val lastIndex = (content.length - 1).coerceAtLeast(1)
+            content.forEachIndexed { index, character ->
+                val progress = index.toFloat() / lastIndex.toFloat()
+                val color = interpolateColor(colors.left, colors.right, progress)
+                text.append(Text.literal(character.toString()).setStyle(Style.EMPTY.withColor(color)))
+            }
+            text
+        }
+
+        if (baseStyle.isEmpty) {
+            return cached.copy()
+        }
+
+        val rebuilt = Text.empty()
+        cached.visit({ style, segment ->
+            rebuilt.append(Text.literal(segment).setStyle(style.withParent(baseStyle)))
+            Optional.empty<Unit>()
+        }, Style.EMPTY)
+        return rebuilt
+    }
+
+    private fun gradientText(content: String, animatedStyle: AnimatedGradientStyle, baseStyle: Style, time: Double): Text {
         val text = Text.empty()
-        val maxIndex = (content.length - 1).coerceAtLeast(1)
 
         content.forEachIndexed { index, character ->
-            val progress = index.toFloat() / maxIndex.toFloat()
-            val color = interpolate(leftColor, rightColor, progress)
+            val color = animatedStyle.getColor(index, time)
             text.append(Text.literal(character.toString()).setStyle(baseStyle.withColor(color)))
         }
 
@@ -1472,15 +1977,20 @@ object NameStyler {
         }
 
         val output = StringBuilder()
-        val maxIndex = (content.length - 1).coerceAtLeast(1)
         val fallbackLetterColor = letterColors?.lastOrNull()
+        val animatedStyle = gradientColors
+            ?.takeIf { customization.hasAnimatedGradient() }
+            ?.let { resolveAnimatedGradientStyle(customization) }
+        val animationTime = if (animatedStyle != null) currentAnimationTime() else 0.0
 
         content.forEachIndexed { index, character ->
             val color = if (!letterColors.isNullOrEmpty()) {
                 letterColors.getOrElse(index) { fallbackLetterColor ?: letterColors.last() }
+            } else if (gradientColors != null && animatedStyle == null) {
+                val progress = if (content.length <= 1) 0f else index.toFloat() / (content.length - 1).toFloat()
+                interpolateColor(gradientColors.left, gradientColors.right, progress)
             } else {
-                val progress = index.toFloat() / maxIndex.toFloat()
-                interpolate(gradientColors!!.left, gradientColors.right, progress)
+                animatedStyle!!.getColor(index, animationTime)
             }
             val hex = "%06X".format(color)
             output.append(legacyFormat).append('x')
@@ -1501,6 +2011,251 @@ object NameStyler {
         customization: PlayerCustomizationRegistry.PlayerCustomization,
     ): Style =
         if (customization.nameBold) style.withBold(true) else style
+
+    private fun currentAnimationTime(): Double {
+        val client = MinecraftClient.getInstance()
+        val world = client?.world ?: return 0.0
+        return world.time.toDouble() + client.renderTickCounter.getTickProgress(true).toDouble()
+    }
+
+    private fun currentAnimationFrameIndex(animationTime: Double): Long? {
+        if (forceAnimatedNameUncached) {
+            return null
+        }
+
+        val client = MinecraftClient.getInstance()
+        val visiblePlayers = client?.world?.players?.size ?: 0
+        if (visiblePlayers < largeLobbyAnimationThreshold) {
+            return null
+        }
+        return floor(animationTime * throttledAnimationFps).toLong()
+    }
+
+    private fun incrementDebugCounter(counter: LongAdder) {
+        if (!animatedNameDebugEnabled) {
+            return
+        }
+        counter.increment()
+        maybeLogDebugCounters()
+    }
+
+    private fun maybeLogDebugCounters() {
+        val now = System.currentTimeMillis()
+        val previous = debugCounterLastLog.get()
+        if (now - previous < 1_000L || !debugCounterLastLog.compareAndSet(previous, now)) {
+            return
+        }
+
+        ThrowerListMod.logger.info(
+            "AnimatedNameProfiler orderedTextCalls={} planHits={} planMisses={} staticHits={} staticMisses={} frameHits={} frameMisses={} sourceHits={} sourceMisses={} asOrderedText={} buildPlans={} hudHits={} hudMisses={}",
+            debugCounters.orderedTextCalls.sumThenReset(),
+            debugCounters.planCacheHits.sumThenReset(),
+            debugCounters.planCacheMisses.sumThenReset(),
+            debugCounters.finalStaticCacheHits.sumThenReset(),
+            debugCounters.finalStaticCacheMisses.sumThenReset(),
+            debugCounters.animatedFrameCacheHits.sumThenReset(),
+            debugCounters.animatedFrameCacheMisses.sumThenReset(),
+            debugCounters.sourceCacheHits.sumThenReset(),
+            debugCounters.sourceCacheMisses.sumThenReset(),
+            debugCounters.asOrderedTextCalls.sumThenReset(),
+            debugCounters.buildPlanCalls.sumThenReset(),
+            debugCounters.hudCacheHits.sumThenReset(),
+            debugCounters.hudCacheMisses.sumThenReset(),
+        )
+    }
+
+    private fun interpolateColor(start: Int, end: Int, progress: Float): Int {
+        val clamped = progress.coerceIn(0f, 1f)
+        val startR = (start shr 16) and 0xFF
+        val startG = (start shr 8) and 0xFF
+        val startB = start and 0xFF
+
+        val endR = (end shr 16) and 0xFF
+        val endG = (end shr 8) and 0xFF
+        val endB = end and 0xFF
+
+        val r = (startR + ((endR - startR) * clamped)).toInt().coerceIn(0, 255)
+        val g = (startG + ((endG - startG) * clamped)).toInt().coerceIn(0, 255)
+        val b = (startB + ((endB - startB) * clamped)).toInt().coerceIn(0, 255)
+        return (r shl 16) or (g shl 8) or b
+    }
+
+    private fun logAnimatedRender(
+        matchedName: String,
+        customization: PlayerCustomizationRegistry.PlayerCustomization,
+    ) {
+        val renderPath = when (activeRenderPath.get()) {
+            TransformKind.NAMEPLATE_TEXT -> "nameplate"
+            TransformKind.SCOREBOARD_TEXT, TransformKind.SCOREBOARD_STRING, TransformKind.SIDEBAR_TEXT -> "scoreboard"
+            TransformKind.GRADIENT_TEXT, TransformKind.GRADIENT_STRING -> "text-renderer"
+            TransformKind.CHAT_HEADER_TEXT -> "chat-header"
+            TransformKind.DECORATED_STRING -> "decorated-string"
+            null -> "unknown"
+        }
+        val client = MinecraftClient.getInstance()
+        val publicLobby = client != null && client.currentServerEntry != null && !client.isIntegratedServerRunning
+        val speed = customization.nameAnimationSpeed ?: animatedGradientSpeed
+        val logKey = "${customization.username.lowercase(Locale.ROOT)}|$renderPath|$publicLobby"
+        if (!loggedAnimatedPaths.add(logKey)) {
+            return
+        }
+
+        ThrowerListMod.logger.info(
+            "Animated name render: player='{}' mode='animated_gradient' speed={} renderPath='{}' publicLobby={} dynamicAnimationEnabled={}",
+            matchedName,
+            speed,
+            renderPath,
+            publicLobby,
+            true,
+        )
+    }
+
+    private fun clearDebugTransform() {
+        if (animatedNameDebugEnabled) {
+            lastDebugTransform.remove()
+        }
+    }
+
+    private fun publishDebugTransform(
+        kind: TransformKind,
+        sourceText: String,
+        resultText: String,
+        resultIdentityHash: Int,
+        resultHash: Int,
+        finalOrderedTextCacheUsed: Boolean,
+        sourceDataCacheUsed: Boolean,
+        plan: OrderedTextTransformPlan? = null,
+    ) {
+        if (!animatedNameDebugEnabled) {
+            return
+        }
+
+        val match = plan?.matches?.firstOrNull { it.isAnimatedGradient }
+            ?: findFirstNameMatch(sourceText, candidatesForKind(kind))
+                ?.takeIf { it.customization.hasAnimatedGradient() }
+                ?.let { matched ->
+                    ResolvedOrderedMatch(
+                        start = matched.nameMatch.index,
+                        end = matched.nameMatch.index + matched.nameMatch.matchedName.length,
+                        content = matched.nameMatch.matchedName,
+                        baseStyle = Style.EMPTY,
+                        customization = matched.customization,
+                        animatedStyle = resolveAnimatedGradientStyle(matched.customization),
+                        isAnimatedGradient = true,
+                        hasBadge = matched.customization.hasBadge,
+                        hasDecorations = matched.customization.hasDecorations,
+                        hasExplicitNameColors = matched.customization.explicitNameColors,
+                        hasBadgeAlready = false,
+                        hasTrailingContent = false,
+                    )
+                }
+            ?: run {
+                lastDebugTransform.remove()
+                return
+            }
+
+        val animatedStyle = match.animatedStyle
+        val world = MinecraftClient.getInstance().world
+        val animationTime = currentAnimationTime()
+        lastDebugTransform.set(
+            DebugTransformMetadata(
+                kind = kind.name,
+                renderPath = currentRenderPathName(),
+                matchedPlayer = match.customization.username,
+                styleMode = if (match.isAnimatedGradient) "animated_gradient" else "static",
+                animated = match.isAnimatedGradient,
+                worldTime = world?.time ?: -1L,
+                animationTime = animationTime,
+                animationOffset = animatedStyle?.offsetAt(animationTime) ?: 0f,
+                finalOrderedTextCacheUsed = finalOrderedTextCacheUsed,
+                sourceDataCacheUsed = sourceDataCacheUsed,
+                resultIdentityHash = resultIdentityHash,
+                resultHash = resultHash,
+                resultText = resultText,
+            ),
+        )
+    }
+
+    private fun currentRenderPathName(): String =
+        when (activeRenderPath.get()) {
+            TransformKind.NAMEPLATE_TEXT -> "nameplate"
+            TransformKind.SCOREBOARD_TEXT, TransformKind.SCOREBOARD_STRING, TransformKind.SIDEBAR_TEXT -> "scoreboard"
+            TransformKind.GRADIENT_TEXT, TransformKind.GRADIENT_STRING -> "text-renderer"
+            TransformKind.CHAT_HEADER_TEXT -> "chat-header"
+            TransformKind.DECORATED_STRING -> "decorated-string"
+            null -> "unknown"
+        }
+
+    fun debugRenderReceipt(
+        stage: String,
+        renderMethod: String,
+        incomingText: String?,
+        outgoingText: String?,
+        outgoingIdentityHash: Int,
+        receivedCachedText: Boolean,
+    ) {
+        if (!animatedNameDebugEnabled) {
+            return
+        }
+
+        val debug = lastDebugTransform.get() ?: return
+        val playerName = debug.matchedPlayer ?: return
+        if (!shouldDebugPlayer(playerName)) {
+            return
+        }
+
+        val client = MinecraftClient.getInstance()
+        val world = client.world
+        val visiblePlayers = world?.players?.size ?: 0
+        val lobbyType = when {
+            client.isIntegratedServerRunning -> "singleplayer"
+            client.currentServerEntry != null -> "multiplayer-public"
+            else -> "unknown"
+        }
+        val logKey = "$stage|$renderMethod|${playerName.lowercase(Locale.ROOT)}"
+        val now = System.currentTimeMillis()
+        val previous = debugLogTimes.put(logKey, now)
+        if (previous != null && now - previous < debugLogIntervalMillis) {
+            return
+        }
+
+        ThrowerListMod.logger.info(
+            "AnimatedNameDebug stage={} player='{}' lobbyType={} visiblePlayers={} renderMethod={} styleMode={} animated={} worldTime={} animationTime={} animationOffset={} finalOrderedTextCacheUsed={} sourceDataCacheUsed={} receivedCachedText={} incomingHash={} outgoingHash={} outgoingIdentity={} incoming='{}' outgoing='{}'",
+            stage,
+            playerName,
+            lobbyType,
+            visiblePlayers,
+            renderMethod,
+            debug.styleMode,
+            debug.animated,
+            debug.worldTime,
+            debug.animationTime,
+            debug.animationOffset,
+            debug.finalOrderedTextCacheUsed,
+            debug.sourceDataCacheUsed,
+            receivedCachedText,
+            incomingText?.hashCode() ?: 0,
+            outgoingText?.hashCode() ?: debug.resultHash,
+            outgoingIdentityHash,
+            incomingText.orEmpty().take(80),
+            outgoingText.orEmpty().take(80),
+        )
+    }
+
+    private fun shouldDebugPlayer(playerName: String): Boolean {
+        val client = MinecraftClient.getInstance()
+        val self = client.player?.gameProfile?.name?.lowercase(Locale.ROOT)
+        if (playerName.lowercase(Locale.ROOT) == self) {
+            return true
+        }
+
+        val otherAnimated = client.world?.players
+            ?.asSequence()
+            ?.mapNotNull { player -> PlayerCustomizationRegistry.find(player.gameProfile)?.takeIf { it.hasAnimatedGradient() }?.username }
+            ?.firstOrNull { !it.equals(self, ignoreCase = true) }
+            ?.lowercase(Locale.ROOT)
+        return playerName.lowercase(Locale.ROOT) == otherAnimated
+    }
 
     private fun activeLegacyCodes(text: String, endExclusive: Int): String {
         var colorCode: Char? = null

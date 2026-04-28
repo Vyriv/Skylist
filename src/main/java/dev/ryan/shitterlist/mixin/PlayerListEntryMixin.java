@@ -40,6 +40,9 @@ public abstract class PlayerListEntryMixin {
         if (text == null) {
             return;
         }
+        if (NameStyler.INSTANCE.hasAnimatedStyledProfile(this.profile)) {
+            return;
+        }
 
         Text current = text;
         if (NameStyler.INSTANCE.hasStyledProfile(this.profile)) {

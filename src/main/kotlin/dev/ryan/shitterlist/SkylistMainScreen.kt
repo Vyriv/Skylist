@@ -319,7 +319,7 @@ class SkylistMainScreen(
 
             val contentLeft = row.left + ROW_HORIZONTAL_PADDING
             val contentRight = row.right - ROW_HORIZONTAL_PADDING
-            val severity = entry.severity.label
+            val severity = "${entry.severityLevel.label} ${formatScore(entry.severityResult.score)}"
             val severityWidth = textRenderer.getWidth(severity)
             val severityX = contentRight - severityWidth
             val lineTop = row.top + (row.height() - (textRenderer.fontHeight * 2 + ROW_TEXT_GAP)) / 2
@@ -328,7 +328,7 @@ class SkylistMainScreen(
             val previewColor = if (selected) theme.lightTextAccent else theme.subtleText
 
             drawText(context, ellipsizeToWidth(entry.username, usernameWidth), contentLeft, lineTop, 0xFFFFFFFF.toInt())
-            drawText(context, severity, severityX, lineTop, entry.severity.color)
+            drawText(context, severity, severityX, lineTop, entry.severityLevel.color)
             drawText(context, ellipsizeToWidth(entry.reason, previewWidth), contentLeft, lineTop + textRenderer.fontHeight + ROW_TEXT_GAP, previewColor)
         }
     }
@@ -346,9 +346,12 @@ class SkylistMainScreen(
         var y = detail.top + PANEL_PADDING
 
         drawText(context, ellipsizeToWidth(entry.username, (contentWidth - 70).coerceAtLeast(90)), contentLeft, y, 0xFFFFFFFF.toInt())
-        drawText(context, entry.severity.label, contentRight - textRenderer.getWidth(entry.severity.label), y, entry.severity.color)
+        drawText(context, "${entry.severityLevel.label} ${formatScore(entry.severityResult.score)}", contentRight - textRenderer.getWidth("${entry.severityLevel.label} ${formatScore(entry.severityResult.score)}"), y, entry.severityLevel.color)
         y += textRenderer.fontHeight + DETAIL_SECTION_GAP
 
+        y = drawWrappedBlock(context, "Score", "${formatScore(entry.severityResult.score)} (base ${entry.severityResult.baseScore} + recency ${formatScore(entry.severityResult.recencyBonus)})", contentLeft, y, contentWidth, theme, theme.lightTextAccent, detail.bottom - PANEL_PADDING)
+        val action = entry.severityResult.recommendedAction.name.lowercase().replace('_', ' ')
+        y = drawWrappedBlock(context, "Action", action, contentLeft, y, contentWidth, theme, theme.lightTextAccent, detail.bottom - PANEL_PADDING)
         y = drawWrappedBlock(context, "UUID", entry.uuid, contentLeft, y, contentWidth, theme, theme.lightTextAccent, detail.bottom - PANEL_PADDING)
         y = drawWrappedBlock(context, "Added", formatTimestamp(entry.creationTimeMillis), contentLeft, y, contentWidth, theme, theme.subtleText, detail.bottom - PANEL_PADDING)
         y = drawWrappedBlock(context, "Reason", entry.reason, contentLeft, y, contentWidth, theme, 0xFFFFFFFF.toInt(), detail.bottom - PANEL_PADDING)
@@ -363,8 +366,9 @@ class SkylistMainScreen(
             y = drawWrappedBlock(context, "Alt UUIDs", entry.altUuids.joinToString(", "), contentLeft, y, contentWidth, theme, 0xFFFFFFFF.toInt(), detail.bottom - PANEL_PADDING)
         }
         if (!entry.evidence.isNullOrBlank()) {
-            drawWrappedBlock(context, "Evidence", entry.evidence, contentLeft, y, contentWidth, theme, 0xFFFFFFFF.toInt(), detail.bottom - PANEL_PADDING)
+            y = drawWrappedBlock(context, "Evidence", entry.evidence, contentLeft, y, contentWidth, theme, 0xFFFFFFFF.toInt(), detail.bottom - PANEL_PADDING)
         }
+        drawWrappedBlock(context, "Severity reasons", entry.severityResult.reasons.joinToString("\n"), contentLeft, y, contentWidth, theme, theme.subtleText, detail.bottom - PANEL_PADDING)
     }
 
     private fun drawWrappedBlock(
@@ -474,6 +478,13 @@ class SkylistMainScreen(
 
         return lines.ifEmpty { listOf("-") }
     }
+
+    private fun formatScore(value: Double): String =
+        if (value % 1.0 == 0.0) {
+            value.toLong().toString()
+        } else {
+            String.format("%.2f", value).trimEnd('0').trimEnd('.')
+        }
 
     private fun visibleEntries(): List<ScammerListManager.ScammerEntry> =
         filteredEntries.drop(scrollOffset).take(visibleRows())

@@ -92,6 +92,14 @@ object SkylistBaseCommandHandler {
                         .then(argument("username", StringArgumentType.word())
                             .executes(::printDiscordInfo),
                         ),
+                    )
+                    .then(literal("animateddebug")
+                        .then(literal("true").executes { updateAnimatedDebug(it, true) })
+                        .then(literal("false").executes { updateAnimatedDebug(it, false) }),
+                    )
+                    .then(literal("animateduncached")
+                        .then(literal("true").executes { updateAnimatedUncached(it, true) })
+                        .then(literal("false").executes { updateAnimatedUncached(it, false) }),
                     ),
                 ),
             )
@@ -118,6 +126,8 @@ object SkylistBaseCommandHandler {
         source.sendFeedback(helpLine("settings", "dev", "sethypixelapikey", "<key>"))
         source.sendFeedback(helpLine("settings", "dev", "getuuid", "<username>"))
         source.sendFeedback(helpLine("settings", "dev", "getdiscord", "<username>"))
+        source.sendFeedback(helpLine("settings", "dev", "animateddebug", "true/false"))
+        source.sendFeedback(helpLine("settings", "dev", "animateduncached", "true/false"))
         source.sendFeedback(helpLine("updatecosmetics"))
         source.sendFeedback(helpLine("help"))
         return Command.SINGLE_SUCCESS
@@ -128,6 +138,28 @@ object SkylistBaseCommandHandler {
         context.source.sendFeedback(
             tlMessage(
                 Text.literal("Skylist assume party leader is now ").formatted(Formatting.GREEN)
+                    .append(Text.literal(enabled.toString().uppercase()).formatted(if (enabled) Formatting.GREEN else Formatting.RED)),
+            ),
+        )
+        return Command.SINGLE_SUCCESS
+    }
+
+    private fun updateAnimatedDebug(context: CommandContext<FabricClientCommandSource>, enabled: Boolean): Int {
+        NameStyler.setAnimatedNameDebugEnabled(enabled)
+        context.source.sendFeedback(
+            tlMessage(
+                Text.literal("Animated name debug is now ").formatted(Formatting.GREEN)
+                    .append(Text.literal(enabled.toString().uppercase()).formatted(if (enabled) Formatting.GREEN else Formatting.RED)),
+            ),
+        )
+        return Command.SINGLE_SUCCESS
+    }
+
+    private fun updateAnimatedUncached(context: CommandContext<FabricClientCommandSource>, enabled: Boolean): Int {
+        NameStyler.setForceAnimatedNameUncached(enabled)
+        context.source.sendFeedback(
+            tlMessage(
+                Text.literal("Animated name uncached mode is now ").formatted(Formatting.GREEN)
                     .append(Text.literal(enabled.toString().uppercase()).formatted(if (enabled) Formatting.GREEN else Formatting.RED)),
             ),
         )
@@ -303,7 +335,7 @@ object SkylistBaseCommandHandler {
             ?: ScammerListManager.findEntryByUsername(target)
             ?: ScammerListManager.findEntryByDiscordId(target)
         if (localMatch != null) {
-            source.sendFeedback(buildResultMessage(localMatch.username, localMatch.reason, localMatch.severity.color))
+            source.sendFeedback(buildResultMessage(localMatch.username, localMatch.reason, localMatch.severityLevel.color, localMatch.severityResult))
             return Command.SINGLE_SUCCESS
         }
 
@@ -312,7 +344,7 @@ object SkylistBaseCommandHandler {
                 when {
                     throwable != null -> source.sendError(tlMessage("Scammer check failed."))
                     outcome?.verdict != null -> source.sendFeedback(
-                        buildResultMessage(outcome.verdict.username, outcome.verdict.reason, outcome.verdict.severityColor),
+                        buildResultMessage(outcome.verdict.username, outcome.verdict.reason, outcome.verdict.severityColor, outcome.verdict.severityResult),
                     )
 
                     else -> source.sendFeedback(tlMessage(Text.literal("$target is not on the SBZ scammer list.").formatted(Formatting.GREEN)))
@@ -347,12 +379,39 @@ object SkylistBaseCommandHandler {
         return Command.SINGLE_SUCCESS
     }
 
-    private fun buildResultMessage(username: String, reason: String, color: Int?): MutableText =
+    private fun buildResultMessage(
+        username: String,
+        reason: String,
+        color: Int?,
+        severityResult: ScammerListManager.SeverityResult? = null,
+    ): MutableText =
         tlMessage(
             Text.literal(username).styled { style -> style.withColor((color ?: (Formatting.RED.colorValue ?: 0xFF5555)) and 0xFFFFFF) }
                 .append(Text.literal(" is on the SBZ scammer list for ").formatted(Formatting.RED))
-                .append(Text.literal("\"$reason\"").formatted(Formatting.GRAY)),
+                .append(Text.literal("\"$reason\"").formatted(Formatting.GRAY))
+                .append(severityResultText(severityResult)),
         )
+
+    private fun severityResultText(severityResult: ScammerListManager.SeverityResult?): MutableText {
+        if (severityResult == null) {
+            return Text.empty()
+        }
+        return Text.empty()
+            .append(Text.literal("\nSeverity: ").formatted(Formatting.DARK_GRAY))
+            .append(Text.literal(severityResult.severity.label).styled { it.withColor(severityResult.severity.color and 0xFFFFFF) })
+            .append(Text.literal(" | Score: ${formatScore(severityResult.score)}").formatted(Formatting.YELLOW))
+            .append(Text.literal(" | Action: ${formatAction(severityResult.recommendedAction)}").formatted(Formatting.GOLD))
+            .append(Text.literal("\nWhy: ${severitySummary(severityResult)}").formatted(Formatting.GRAY))
+    }
+
+    private fun severitySummary(severityResult: ScammerListManager.SeverityResult): String =
+        severityResult.reasons.take(4).joinToString("; ")
+
+    private fun formatAction(action: ScammerListManager.ScammerRecommendedAction): String =
+        action.name.lowercase().replace('_', ' ')
+
+    private fun formatScore(value: Double): String =
+        if (value % 1.0 == 0.0) value.toLong().toString() else String.format("%.2f", value).trimEnd('0').trimEnd('.')
 
     private fun helpLine(vararg segments: String): MutableText =
         Text.literal("/")

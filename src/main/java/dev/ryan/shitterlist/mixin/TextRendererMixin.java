@@ -46,7 +46,16 @@ public abstract class TextRendererMixin {
             return text;
         }
 
-        return NameStyler.INSTANCE.applyGradientToName(text);
+        Text styled = NameStyler.INSTANCE.applyGradientToName(text);
+        NameStyler.INSTANCE.debugRenderReceipt(
+            "text-renderer",
+            "TextRenderer.draw(Text)",
+            text.getString(),
+            styled.getString(),
+            System.identityHashCode(styled),
+            styled == text
+        );
+        return styled;
     }
 
     @ModifyVariable(
@@ -59,7 +68,16 @@ public abstract class TextRendererMixin {
             return text;
         }
 
-        return NameStyler.INSTANCE.applyGradientToOrderedText(text);
+        OrderedText styled = NameStyler.INSTANCE.applyGradientToOrderedText(text);
+        NameStyler.INSTANCE.debugRenderReceipt(
+            "text-renderer",
+            "TextRenderer.draw(OrderedText)",
+            null,
+            null,
+            System.identityHashCode(styled),
+            styled == text
+        );
+        return styled;
     }
 
     @ModifyVariable(
@@ -72,6 +90,15 @@ public abstract class TextRendererMixin {
             return text;
         }
 
-        return NameStyler.INSTANCE.applyGradientToOrderedText(text);
+        OrderedText styled = NameStyler.INSTANCE.applyGradientToOrderedText(text);
+        NameStyler.INSTANCE.debugRenderReceipt(
+            "text-renderer",
+            "TextRenderer.drawWithOutline(OrderedText)",
+            null,
+            null,
+            System.identityHashCode(styled),
+            styled == text
+        );
+        return styled;
     }
 }
