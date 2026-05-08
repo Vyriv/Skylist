@@ -186,6 +186,16 @@ object ConfigManager {
     }
 
     @Synchronized
+    fun isDeveloperIdentifierEnabled(): Boolean = settings.developerIdentifierEnabled
+
+    @Synchronized
+    fun toggleDeveloperIdentifierEnabled(): Boolean {
+        settings.developerIdentifierEnabled = !settings.developerIdentifierEnabled
+        save()
+        return settings.developerIdentifierEnabled
+    }
+
+    @Synchronized
     fun getHypixelApiKey(): String? = settings.hypixelApiKey?.takeIf { it.isNotBlank() }
 
     @Synchronized
@@ -894,6 +904,7 @@ object ConfigManager {
         var assumePartyLeader: Boolean = false,
         var customCapesDisabled: Boolean = false,
         var customScalerDisabled: Boolean = false,
+        var developerIdentifierEnabled: Boolean = false,
         var hypixelApiKey: String? = null,
         var uiTheme: String? = "ocean",
         var remoteScammerChecksEnabled: Boolean? = true,

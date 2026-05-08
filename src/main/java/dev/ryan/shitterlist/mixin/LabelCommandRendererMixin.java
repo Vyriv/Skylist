@@ -1,6 +1,7 @@
 package dev.ryan.throwerlist.mixin;
 
 import dev.ryan.throwerlist.NameStyler;
+import dev.ryan.throwerlist.SkylistPresenceManager;
 import net.minecraft.client.render.command.LabelCommandRenderer;
 import net.minecraft.text.Text;
 import org.spongepowered.asm.mixin.Mixin;
@@ -23,6 +24,7 @@ public abstract class LabelCommandRendererMixin {
         }
 
         Text styled = NameStyler.INSTANCE.applyNameplateDecorations(text);
+        styled = SkylistPresenceManager.INSTANCE.applyIdentifier(styled, styled.getString());
         NameStyler.INSTANCE.debugRenderReceipt(
             "label-command",
             "LabelCommandRenderer.render",

@@ -1,9 +1,11 @@
 package dev.ryan.throwerlist.mixin;
 
 import dev.ryan.throwerlist.NameStyler;
+import dev.ryan.throwerlist.SkylistPresenceManager;
 import net.minecraft.client.render.entity.EntityRenderer;
 import net.minecraft.client.render.entity.state.EntityRenderState;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.text.Text;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -31,6 +33,9 @@ public abstract class EntityRendererMixin<T extends Entity, S extends EntityRend
         }
 
         Text styled = NameStyler.INSTANCE.applyNameplateDecorations(current);
+        if (entity instanceof PlayerEntity player) {
+            styled = SkylistPresenceManager.INSTANCE.applyIdentifier(styled, player.getGameProfile());
+        }
         NameStyler.INSTANCE.debugRenderReceipt(
             "entity-render-state",
             "EntityRenderer.updateRenderState",

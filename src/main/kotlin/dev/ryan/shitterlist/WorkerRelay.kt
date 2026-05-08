@@ -31,4 +31,21 @@ object WorkerRelay {
             else -> throw IOException("Unexpected response ${response.statusCode()} from ${request.uri()}")
         }
     }
+
+    fun postJson(path: String, body: String, timeoutSeconds: Long = 8): JsonObject? {
+        val request = HttpRequest.newBuilder()
+            .uri(URI.create(relayBaseUrl + path))
+            .timeout(Duration.ofSeconds(timeoutSeconds))
+            .header("accept", "application/json,*/*")
+            .header("content-type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build()
+
+        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        return when (response.statusCode()) {
+            in 200..299 -> JsonParser.parseString(response.body()).asJsonObject
+            204, 404 -> null
+            else -> throw IOException("Unexpected response ${response.statusCode()} from ${request.uri()}")
+        }
+    }
 }

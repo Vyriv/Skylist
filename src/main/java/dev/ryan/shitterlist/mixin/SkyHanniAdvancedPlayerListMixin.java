@@ -1,6 +1,7 @@
 package dev.ryan.throwerlist.mixin;
 
 import dev.ryan.throwerlist.NameStyler;
+import dev.ryan.throwerlist.SkylistPresenceManager;
 import net.minecraft.text.Text;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
@@ -53,6 +54,7 @@ public abstract class SkyHanniAdvancedPlayerListMixin {
         }
 
         Text styled = NameStyler.INSTANCE.applyNameplateDisplayDecorations(text);
-        return styled != text ? styled : text;
+        Text identified = SkylistPresenceManager.INSTANCE.applyIdentifier(styled, styled.getString());
+        return identified != text ? identified : text;
     }
 }

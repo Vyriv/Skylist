@@ -1,6 +1,7 @@
 package dev.ryan.throwerlist.mixin;
 
 import dev.ryan.throwerlist.NameStyler;
+import dev.ryan.throwerlist.SkylistPresenceManager;
 import net.minecraft.client.gui.hud.PlayerListHud;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.text.Text;
@@ -23,8 +24,9 @@ public abstract class PlayerListHudMixin {
         }
 
         Text styled = NameStyler.INSTANCE.applyNameplateDisplayDecorations(current);
-        if (styled != current) {
-            cir.setReturnValue(styled);
+        Text identified = SkylistPresenceManager.INSTANCE.applyIdentifier(styled, entry.getProfile());
+        if (identified != current) {
+            cir.setReturnValue(identified);
         }
     }
 
@@ -42,6 +44,7 @@ public abstract class PlayerListHudMixin {
         }
 
         Text styled = NameStyler.INSTANCE.applyNameplateDisplayDecorations(text);
-        return styled != text ? styled : text;
+        Text identified = SkylistPresenceManager.INSTANCE.applyIdentifier(styled, text.getString());
+        return identified != text ? identified : text;
     }
 }

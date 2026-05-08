@@ -15,6 +15,7 @@ class ThrowerListMod : ClientModInitializer {
         CapeTextureManager.initialize()
         PlayerCustomizationRegistry.initialize()
         ContentManager.fetchRemotePeopleOnStartup()
+        SkylistPresenceManager.initialize()
 
         ThrowerListGuiLauncher.register()
         ThrowerListKeybinds.register()

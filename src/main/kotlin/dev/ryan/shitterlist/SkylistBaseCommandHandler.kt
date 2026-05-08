@@ -71,6 +71,9 @@ object SkylistBaseCommandHandler {
             .then(literal("updatecosmetics")
                 .executes(::updateCosmetics),
             )
+            .then(literal("toggleidentifier")
+                .executes(::toggleIdentifier),
+            )
             .then(literal("settings").executes {
                 ThrowerListMod.client.execute {
                     ThrowerListMod.client.setScreen(SkylistBaseSettingsScreen(SkylistMainScreen()))
@@ -334,6 +337,26 @@ object SkylistBaseCommandHandler {
             }
         }
 
+        return Command.SINGLE_SUCCESS
+    }
+
+    private fun toggleIdentifier(context: CommandContext<FabricClientCommandSource>): Int {
+        val source = context.source
+        if (!isOwner(source)) {
+            source.sendError(tlMessage("This command is developer-only."))
+            return 0
+        }
+
+        val enabled = SkylistPresenceManager.toggleIdentifierEnabled()
+        if (enabled) {
+            SkylistPresenceManager.refreshAsync()
+        }
+        source.sendFeedback(
+            tlMessage(
+                Text.literal("Developer identifiers are now ").formatted(Formatting.GREEN)
+                    .append(Text.literal(if (enabled) "ENABLED" else "DISABLED").formatted(if (enabled) Formatting.GREEN else Formatting.RED)),
+            ),
+        )
         return Command.SINGLE_SUCCESS
     }
 
