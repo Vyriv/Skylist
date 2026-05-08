@@ -71,9 +71,6 @@ object SkylistBaseCommandHandler {
             .then(literal("updatecosmetics")
                 .executes(::updateCosmetics),
             )
-            .then(literal("toggleidentifier")
-                .executes(::toggleIdentifier),
-            )
             .then(literal("settings").executes {
                 ThrowerListMod.client.execute {
                     ThrowerListMod.client.setScreen(SkylistBaseSettingsScreen(SkylistMainScreen()))
@@ -105,11 +102,6 @@ object SkylistBaseCommandHandler {
                     .executes(::setHypixelApiKey),
                 ),
             )
-            .then(literal("getuuid")
-                .then(argument("username", StringArgumentType.word())
-                    .executes(::printUuidInfo),
-                ),
-            )
             .then(literal("get")
                 .then(literal("uuid")
                     .then(argument("username", StringArgumentType.word())
@@ -122,15 +114,9 @@ object SkylistBaseCommandHandler {
                     ),
                 ),
             )
-            .then(literal("getdiscord")
-                .then(argument("username", StringArgumentType.word())
-                    .executes(::printDiscordInfo),
-                ),
-            )
-            .then(literal("disablecapes").executes(::toggleCustomCapes))
-            .then(literal("disablescaler").executes(::toggleCustomScaler))
             .then(literal("togglecapes").executes(::toggleCustomCapes))
-            .then(literal("togglescale").executes(::toggleCustomScaler))
+            .then(literal("togglescaler").executes(::toggleCustomScaler))
+            .then(literal("toggleidentifier").executes(::toggleIdentifier))
 
     private fun printHelp(context: CommandContext<FabricClientCommandSource>): Int {
         val source = context.source
@@ -142,12 +128,11 @@ object SkylistBaseCommandHandler {
         source.sendFeedback(helpLine("dev", "assumepartyleader", "true/false"))
         source.sendFeedback(helpLine("dev", "versioninfo"))
         source.sendFeedback(helpLine("dev", "sethypixelapikey", "<key>"))
-        source.sendFeedback(helpLine("dev", "getuuid", "<username>"))
-        source.sendFeedback(helpLine("dev", "getdiscord", "<username>"))
+        source.sendFeedback(helpLine("dev", "get", "uuid", "<username>"))
+        source.sendFeedback(helpLine("dev", "get", "discord", "<username>"))
         source.sendFeedback(helpLine("dev", "togglecapes"))
-        source.sendFeedback(helpLine("dev", "togglescale"))
-        source.sendFeedback(helpLine("dev", "disablecapes"))
-        source.sendFeedback(helpLine("dev", "disablescaler"))
+        source.sendFeedback(helpLine("dev", "togglescaler"))
+        source.sendFeedback(helpLine("dev", "toggleidentifier"))
         source.sendFeedback(helpLine("updatecosmetics"))
         source.sendFeedback(helpLine("help"))
         return Command.SINGLE_SUCCESS
@@ -343,7 +328,7 @@ object SkylistBaseCommandHandler {
     private fun toggleIdentifier(context: CommandContext<FabricClientCommandSource>): Int {
         val source = context.source
         if (!isOwner(source)) {
-            source.sendError(tlMessage("This command is developer-only."))
+            source.sendError(tlMessage("This command is developer only >:("))
             return 0
         }
 
@@ -467,12 +452,12 @@ object SkylistBaseCommandHandler {
                         segment.equals("update", ignoreCase = true) -> Formatting.GREEN
                         segment.equals("versioninfo", ignoreCase = true) -> Formatting.GOLD
                         segment.equals("sethypixelapikey", ignoreCase = true) -> Formatting.GOLD
-                        segment.equals("getuuid", ignoreCase = true) -> Formatting.AQUA
-                        segment.equals("getdiscord", ignoreCase = true) -> Formatting.AQUA
+                        segment.equals("get", ignoreCase = true) -> Formatting.AQUA
+                        segment.equals("uuid", ignoreCase = true) -> Formatting.AQUA
+                        segment.equals("discord", ignoreCase = true) -> Formatting.AQUA
                         segment.equals("togglecapes", ignoreCase = true) -> Formatting.YELLOW
-                        segment.equals("togglescale", ignoreCase = true) -> Formatting.YELLOW
-                        segment.equals("disablecapes", ignoreCase = true) -> Formatting.YELLOW
-                        segment.equals("disablescaler", ignoreCase = true) -> Formatting.YELLOW
+                        segment.equals("togglescaler", ignoreCase = true) -> Formatting.YELLOW
+                        segment.equals("toggleidentifier", ignoreCase = true) -> Formatting.YELLOW
                         segment.equals("updatecosmetics", ignoreCase = true) -> Formatting.GREEN
                         segment.equals("true/false", ignoreCase = true) -> Formatting.GRAY
                         segment.startsWith("<") && segment.endsWith(">") -> Formatting.GRAY

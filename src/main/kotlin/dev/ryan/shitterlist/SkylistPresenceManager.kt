@@ -46,6 +46,14 @@ object SkylistPresenceManager {
         val uuid = client.session.uuidOrNull?.toString()?.replace("-", "")?.lowercase(Locale.ROOT) ?: return
         val username = client.session.username.takeIf { it.isNotBlank() } ?: return
         val hasSkylistPlus = FabricLoader.getInstance().isModLoaded("skylistplus")
+        cacheLocalEntry(
+            PresenceEntry(
+                uuid = uuid,
+                username = username,
+                hasSkylist = true,
+                hasSkylistPlus = hasSkylistPlus,
+            ),
+        )
 
         CompletableFuture.runAsync {
             runCatching {
@@ -101,8 +109,27 @@ object SkylistPresenceManager {
             return null
         }
 
+        localPresenceEntry(profile.id?.toString(), profile.name)?.let { return it }
         normalizeUuid(profile.id?.toString())?.let(uuidEntries::get)?.let { return it }
         return normalizeUsername(profile.name)?.let(usernameEntries::get)
+    }
+
+    private fun localPresenceEntry(uuid: String?, username: String?): PresenceEntry? {
+        val client = ThrowerListMod.client
+        val sessionUuid = client.session.uuidOrNull?.toString()
+        val sessionName = client.session.username
+        val matchesSelf = normalizeUuid(uuid) == normalizeUuid(sessionUuid) ||
+            (normalizeUsername(username) != null && normalizeUsername(username) == normalizeUsername(sessionName))
+        if (!matchesSelf) {
+            return null
+        }
+
+        return PresenceEntry(
+            uuid = normalizeUuid(sessionUuid) ?: return null,
+            username = sessionName.takeIf { it.isNotBlank() },
+            hasSkylist = true,
+            hasSkylistPlus = FabricLoader.getInstance().isModLoaded("skylistplus"),
+        )
     }
 
     private fun prefixForEntry(entry: PresenceEntry): Text =
@@ -157,4 +184,9 @@ object SkylistPresenceManager {
         value?.trim()
             ?.takeIf { it.isNotEmpty() }
             ?.lowercase(Locale.ROOT)
+
+    private fun cacheLocalEntry(entry: PresenceEntry) {
+        uuidEntries[entry.uuid] = entry
+        normalizeUsername(entry.username)?.let { usernameEntries[it] = entry }
+    }
 }
