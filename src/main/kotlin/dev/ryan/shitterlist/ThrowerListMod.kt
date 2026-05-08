@@ -18,7 +18,7 @@ class ThrowerListMod : ClientModInitializer {
 
         ThrowerListGuiLauncher.register()
         ThrowerListKeybinds.register()
-        CommandAliases.register()
+        OutgoingNameRewrite.register()
 
         ScammerListManager.start()
         ScammerCheckService.start()

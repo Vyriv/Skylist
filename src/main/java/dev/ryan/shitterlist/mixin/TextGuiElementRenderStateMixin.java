@@ -44,8 +44,7 @@ public abstract class TextGuiElementRenderStateMixin {
             !NameStyler.INSTANCE.hasGradientStyles() ||
             client == null ||
             client.world == null ||
-            client.player == null ||
-            client.currentScreen != null) {
+            client.player == null) {
             return;
         }
 

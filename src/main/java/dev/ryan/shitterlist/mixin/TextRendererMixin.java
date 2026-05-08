@@ -11,6 +11,8 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 @Mixin(TextRenderer.class)
 public abstract class TextRendererMixin {
+    private static final ThreadLocal<Integer> throwerlist$decorationDepth = ThreadLocal.withInitial(() -> 0);
+
     private static boolean throwerlist$shouldDecorateRenderedText() {
         if (!NameStyler.INSTANCE.hasGradientStyles()) {
             return false;
@@ -20,7 +22,21 @@ public abstract class TextRendererMixin {
         return client != null &&
             client.world != null &&
             client.player != null &&
-            client.currentScreen == null;
+            throwerlist$decorationDepth.get() == 0;
+    }
+
+    private static <T> T throwerlist$decorateSafely(java.util.function.Supplier<T> action) {
+        throwerlist$decorationDepth.set(throwerlist$decorationDepth.get() + 1);
+        try {
+            return action.get();
+        } finally {
+            int depth = throwerlist$decorationDepth.get() - 1;
+            if (depth <= 0) {
+                throwerlist$decorationDepth.remove();
+            } else {
+                throwerlist$decorationDepth.set(depth);
+            }
+        }
     }
 
     @ModifyVariable(
@@ -33,7 +49,7 @@ public abstract class TextRendererMixin {
             return text;
         }
 
-        return NameStyler.INSTANCE.applyGradientToString(text);
+        return throwerlist$decorateSafely(() -> NameStyler.INSTANCE.applyGradientToString(text));
     }
 
     @ModifyVariable(
@@ -46,7 +62,7 @@ public abstract class TextRendererMixin {
             return text;
         }
 
-        Text styled = NameStyler.INSTANCE.applyGradientToName(text);
+        Text styled = throwerlist$decorateSafely(() -> NameStyler.INSTANCE.applyGradientToName(text));
         NameStyler.INSTANCE.debugRenderReceipt(
             "text-renderer",
             "TextRenderer.draw(Text)",
@@ -68,7 +84,7 @@ public abstract class TextRendererMixin {
             return text;
         }
 
-        OrderedText styled = NameStyler.INSTANCE.applyGradientToOrderedText(text);
+        OrderedText styled = throwerlist$decorateSafely(() -> NameStyler.INSTANCE.applyGradientToOrderedText(text));
         NameStyler.INSTANCE.debugRenderReceipt(
             "text-renderer",
             "TextRenderer.draw(OrderedText)",
@@ -90,7 +106,7 @@ public abstract class TextRendererMixin {
             return text;
         }
 
-        OrderedText styled = NameStyler.INSTANCE.applyGradientToOrderedText(text);
+        OrderedText styled = throwerlist$decorateSafely(() -> NameStyler.INSTANCE.applyGradientToOrderedText(text));
         NameStyler.INSTANCE.debugRenderReceipt(
             "text-renderer",
             "TextRenderer.drawWithOutline(OrderedText)",

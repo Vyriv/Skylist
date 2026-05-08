@@ -266,18 +266,10 @@ class PartyListener(
     }
 
     private fun shouldShowPopup(result: ScammerCheckService.CheckResult, tradePopup: Boolean): Boolean {
-        val action = result.recommendedAction
         if (tradePopup) {
             return ConfigManager.isTradeScammerPopupEnabled() && shouldWarn(result)
         }
-        return shouldWarn(result) && when (action) {
-            ScammerListManager.ScammerRecommendedAction.WARN,
-            ScammerListManager.ScammerRecommendedAction.KICK_RECOMMENDED,
-            ScammerListManager.ScammerRecommendedAction.AUTO_KICK_ALLOWED,
-            -> true
-
-            else -> false
-        }
+        return false
     }
 
     private fun shouldAutokick(result: ScammerCheckService.CheckResult): Boolean {

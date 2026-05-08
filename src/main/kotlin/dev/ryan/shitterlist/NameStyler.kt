@@ -851,10 +851,11 @@ object NameStyler {
         kind: TransformKind,
         transform: (Text) -> Text,
     ): Text {
+        textIdentityCache(kind).get(message)?.let { return it }
+
         val version = currentRegistryVersion()
         val plain = message.string
         if (!containsForKind(plain, kind, version)) {
-            textIdentityCache(kind).get(message)?.let { return it }
             cacheTextIdentity(kind, message, message)
             return message
         }
@@ -862,6 +863,7 @@ object NameStyler {
         val animated = hasAnimatedGradientMatch(plain, candidatesForKind(kind))
         if (animated || forceAnimatedNameUncached) {
             val transformed = withRenderPath(kind) { transform(message) }
+            cacheTextIdentity(kind, transformed, transformed)
             publishDebugTransform(
                 kind = kind,
                 sourceText = plain,
@@ -899,12 +901,15 @@ object NameStyler {
         transform: (OrderedTextSourceData, Double) -> Text?,
     ): OrderedText {
         incrementDebugCounter(debugCounters.orderedTextCalls)
+        orderedTextIdentityCache(kind).get(text)?.let { return it }
+
         val version = currentRegistryVersion()
         val bypassSourceCache = forceAnimatedNameUncached
         val sourceLookup = orderedTextSource(text, version, bypassSourceCache)
         val source = sourceLookup.data
         val plan = source.planFor(kind)
         if (plan == null) {
+            cacheOrderedTextIdentity(kind, text, text)
             return text
         }
 
@@ -919,12 +924,15 @@ object NameStyler {
         if (!plan.hasAnimatedGradient && !forceAnimatedNameUncached) {
             orderedTextStaticResultCache.getCached(resultCacheKey)?.let { cached ->
                 incrementDebugCounter(debugCounters.finalStaticCacheHits)
+                cacheOrderedTextIdentity(kind, text, cached)
+                cacheOrderedTextIdentity(kind, cached, cached)
                 return cached
             }
             incrementDebugCounter(debugCounters.finalStaticCacheMisses)
         } else if (frameIndex != null) {
             orderedTextAnimatedFrameCache.getCached(OrderedTextAnimatedFrameCacheKey(resultCacheKey, frameIndex))?.let { cached ->
                 incrementDebugCounter(debugCounters.animatedFrameCacheHits)
+                cacheOrderedTextIdentity(kind, cached, cached)
                 return cached
             }
             incrementDebugCounter(debugCounters.animatedFrameCacheMisses)
@@ -942,9 +950,11 @@ object NameStyler {
         }
         if (!plan.hasAnimatedGradient && !forceAnimatedNameUncached) {
             orderedTextStaticResultCache.putCached(resultCacheKey, ordered)
+            cacheOrderedTextIdentity(kind, text, ordered)
         } else if (frameIndex != null) {
             orderedTextAnimatedFrameCache.putCached(OrderedTextAnimatedFrameCacheKey(resultCacheKey, frameIndex), ordered)
         }
+        cacheOrderedTextIdentity(kind, ordered, ordered)
         publishDebugTransform(
             kind = kind,
             sourceText = source.plain,
