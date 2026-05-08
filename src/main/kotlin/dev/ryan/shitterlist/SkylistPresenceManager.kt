@@ -13,6 +13,9 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 
 object SkylistPresenceManager {
+    private const val redPrefixLegacy = "\u00A7c<3 \u00A7r"
+    private const val pinkPrefixLegacy = "\u00A7d<3 \u00A7r"
+
     private data class PresenceEntry(
         val uuid: String,
         val username: String?,
@@ -104,6 +107,19 @@ object SkylistPresenceManager {
             .append(text.copy())
     }
 
+    fun applyIdentifierToString(text: String?, username: String?): String? {
+        if (text.isNullOrEmpty() || !isIdentifierEnabled() || text.startsWith("<3 ") || text.startsWith(redPrefixLegacy) || text.startsWith(pinkPrefixLegacy)) {
+            return text
+        }
+
+        val entry = normalizeUsername(username)?.let(usernameEntries::get) ?: return text
+        if (!entry.hasSkylist) {
+            return text
+        }
+
+        return legacyPrefixForEntry(entry) + text
+    }
+
     private fun resolveEntry(profile: GameProfile?): PresenceEntry? {
         if (profile == null) {
             return null
@@ -134,6 +150,9 @@ object SkylistPresenceManager {
 
     private fun prefixForEntry(entry: PresenceEntry): Text =
         if (entry.hasSkylistPlus) pinkPrefix else redPrefix
+
+    private fun legacyPrefixForEntry(entry: PresenceEntry): String =
+        if (entry.hasSkylistPlus) pinkPrefixLegacy else redPrefixLegacy
 
     private fun rebuildLookups(entries: JsonArray) {
         val byUuid = linkedMapOf<String, PresenceEntry>()

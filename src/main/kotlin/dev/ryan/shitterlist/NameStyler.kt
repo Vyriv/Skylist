@@ -500,6 +500,9 @@ object NameStyler {
         ) ?: parsed
     }
 
+    fun applyNameplateDisplayDecorationsToString(raw: String?): String? =
+        applyDisplayDecorationsToString(raw, terminalBadgesOnly = false)
+
     fun applyScoreboardDecorations(message: Text): Text =
         applyCachedTextTransform(message, TransformKind.SCOREBOARD_TEXT) {
             rebuildDecorationsAcrossSegments(

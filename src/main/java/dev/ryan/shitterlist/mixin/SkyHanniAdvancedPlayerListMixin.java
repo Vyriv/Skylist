@@ -2,7 +2,6 @@ package dev.ryan.throwerlist.mixin;
 
 import dev.ryan.throwerlist.NameStyler;
 import dev.ryan.throwerlist.SkylistPresenceManager;
-import net.minecraft.text.Text;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
@@ -14,13 +13,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(targets = "at.hannibal2.skyhanni.features.misc.compacttablist.AdvancedPlayerList", remap = false)
 public abstract class SkyHanniAdvancedPlayerListMixin {
     @Inject(
-        method = "createTabLine(Lnet/minecraft/class_2561;Lat/hannibal2/skyhanni/features/misc/compacttablist/TabStringType;)Lat/hannibal2/skyhanni/features/misc/compacttablist/TabLine;",
+        method = "createTabLine(Ljava/lang/String;Lat/hannibal2/skyhanni/features/misc/compacttablist/TabStringType;)Lat/hannibal2/skyhanni/features/misc/compacttablist/TabLine;",
         at = @At("RETURN"),
         cancellable = true,
         remap = false
     )
     private void throwerlist$decorateCompactTabLine(
-        Text component,
+        String component,
         @Coerce Object type,
         CallbackInfoReturnable<Object> cir
     ) {
@@ -30,31 +29,29 @@ public abstract class SkyHanniAdvancedPlayerListMixin {
         }
 
         try {
-            Text currentComponent = (Text) line.getClass().getMethod("getComponent").invoke(line);
-            Text currentCustomName = (Text) line.getClass().getMethod("getCustomName").invoke(line);
+            String currentComponent = (String) line.getClass().getMethod("getText").invoke(line);
+            String currentCustomName = (String) line.getClass().getMethod("getCustomName").invoke(line);
 
-            Text styledComponent = styleIfNeeded(currentComponent);
-            Text styledCustomName = styleIfNeeded(currentCustomName);
+            String renderedCustomName = styleIfNeeded(currentCustomName);
 
-            if (styledComponent == currentComponent && styledCustomName == currentCustomName) {
+            if (renderedCustomName == null || renderedCustomName.equals(currentCustomName)) {
                 return;
             }
 
             Object replacement = line.getClass()
-                .getConstructor(Text.class, type.getClass(), Text.class)
-                .newInstance(styledComponent, type, styledCustomName);
+                .getConstructor(String.class, type.getClass(), String.class)
+                .newInstance(currentComponent, type, renderedCustomName);
             cir.setReturnValue(replacement);
         } catch (ReflectiveOperationException ignored) {
         }
     }
 
-    private static Text styleIfNeeded(Text text) {
+    private static String styleIfNeeded(String text) {
         if (text == null) {
-            return text;
+            return null;
         }
 
-        Text styled = NameStyler.INSTANCE.applyNameplateDisplayDecorations(text);
-        Text identified = SkylistPresenceManager.INSTANCE.applyIdentifier(styled, styled.getString());
-        return identified != text ? identified : text;
+        String styled = NameStyler.INSTANCE.applyNameplateDisplayDecorationsToString(text);
+        return SkylistPresenceManager.INSTANCE.applyIdentifierToString(styled, text);
     }
 }
