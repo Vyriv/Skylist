@@ -50,14 +50,14 @@ public abstract class SkyHanniCustomScoreboardMixin {
 
             Text styled;
             if (rawText instanceof String text) {
-                String styledString = NameStyler.INSTANCE.applyScoreboardDecorationsToString(text);
+                String styledString = NameStyler.INSTANCE.applyScoreboardDisplayDecorationsToString(text);
                 if (styledString == text) {
                     return null;
                 }
-                styled = NameStyler.INSTANCE.applyScoreboardDecorations(styledString);
+                styled = NameStyler.INSTANCE.applyScoreboardDisplayDecorations(styledString);
             } else {
                 Text text = (Text) rawText;
-                styled = NameStyler.INSTANCE.applyScoreboardDecorations(text);
+                styled = NameStyler.INSTANCE.applyScoreboardDisplayDecorations(text);
                 if (styled == text) {
                     return null;
                 }

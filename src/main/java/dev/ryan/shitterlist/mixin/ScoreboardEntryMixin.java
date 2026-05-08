@@ -17,7 +17,7 @@ public abstract class ScoreboardEntryMixin {
             return;
         }
 
-        Text styled = NameStyler.INSTANCE.applyScoreboardDecorations(current);
+        Text styled = NameStyler.INSTANCE.applyScoreboardDisplayDecorations(current);
         if (styled != current) {
             cir.setReturnValue(styled);
         }

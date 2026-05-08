@@ -23,6 +23,12 @@ object SkylistBaseCommandHandler {
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             dispatcher.register(buildRoot("skylist"))
             dispatcher.register(buildRoot("sl"))
+            dispatcher.register(
+                literal("check")
+                    .then(argument("target", StringArgumentType.word())
+                        .executes(::checkTarget),
+                    ),
+            )
         }
     }
 
@@ -71,40 +77,10 @@ object SkylistBaseCommandHandler {
                 }
                 Command.SINGLE_SUCCESS
             }
-                .then(literal("update").executes(::installLatestUpdate))
-                .then(literal("dev")
-                    .then(literal("assumepartyleader")
-                        .then(literal("true").executes { updateAssumePartyLeader(it, true) })
-                        .then(literal("false").executes { updateAssumePartyLeader(it, false) }),
-                    )
-                    .then(literal("versioninfo").executes(::printVersionInfo))
-                    .then(literal("sethypixelapikey")
-                        .then(argument("key", StringArgumentType.word())
-                            .executes(::setHypixelApiKey),
-                        ),
-                    )
-                    .then(literal("getuuid")
-                        .then(argument("username", StringArgumentType.word())
-                            .executes(::printUuidInfo),
-                        ),
-                    )
-                    .then(literal("getdiscord")
-                        .then(argument("username", StringArgumentType.word())
-                            .executes(::printDiscordInfo),
-                        ),
-                    )
-                    .then(literal("animateddebug")
-                        .then(literal("true").executes { updateAnimatedDebug(it, true) })
-                        .then(literal("false").executes { updateAnimatedDebug(it, false) }),
-                    )
-                    .then(literal("animateduncached")
-                        .then(literal("true").executes { updateAnimatedUncached(it, true) })
-                        .then(literal("false").executes { updateAnimatedUncached(it, false) }),
-                    ),
-                ),
+                .then(literal("update").executes(::installLatestUpdate)),
             )
             .then(literal("help").executes(::printHelp))
-            .then(literal("dev")
+            .then(devCommands()
                 .then(literal("addtestscammer")
                     .then(argument("name", StringArgumentType.word())
                         .then(argument("reason", StringArgumentType.greedyString())
@@ -114,6 +90,45 @@ object SkylistBaseCommandHandler {
                 ),
             )
 
+    private fun devCommands() =
+        literal("dev")
+            .then(literal("assumepartyleader")
+                .then(literal("true").executes { updateAssumePartyLeader(it, true) })
+                .then(literal("false").executes { updateAssumePartyLeader(it, false) }),
+            )
+            .then(literal("versioninfo").executes(::printVersionInfo))
+            .then(literal("sethypixelapikey")
+                .then(argument("key", StringArgumentType.word())
+                    .executes(::setHypixelApiKey),
+                ),
+            )
+            .then(literal("getuuid")
+                .then(argument("username", StringArgumentType.word())
+                    .executes(::printUuidInfo),
+                ),
+            )
+            .then(literal("get")
+                .then(literal("uuid")
+                    .then(argument("username", StringArgumentType.word())
+                        .executes(::printUuidInfo),
+                    ),
+                )
+                .then(literal("discord")
+                    .then(argument("username", StringArgumentType.word())
+                        .executes(::printDiscordInfo),
+                    ),
+                ),
+            )
+            .then(literal("getdiscord")
+                .then(argument("username", StringArgumentType.word())
+                    .executes(::printDiscordInfo),
+                ),
+            )
+            .then(literal("disablecapes").executes(::toggleCustomCapes))
+            .then(literal("disablescaler").executes(::toggleCustomScaler))
+            .then(literal("togglecapes").executes(::toggleCustomCapes))
+            .then(literal("togglescale").executes(::toggleCustomScaler))
+
     private fun printHelp(context: CommandContext<FabricClientCommandSource>): Int {
         val source = context.source
         source.sendFeedback(Text.literal("Skylist commands:").formatted(Formatting.GOLD))
@@ -121,13 +136,15 @@ object SkylistBaseCommandHandler {
         source.sendFeedback(helpLine("list", "scammers"))
         source.sendFeedback(helpLine("check", "<username/uuid/discordId>"))
         source.sendFeedback(helpLine("settings", "update"))
-        source.sendFeedback(helpLine("settings", "dev", "assumepartyleader", "true/false"))
-        source.sendFeedback(helpLine("settings", "dev", "versioninfo"))
-        source.sendFeedback(helpLine("settings", "dev", "sethypixelapikey", "<key>"))
-        source.sendFeedback(helpLine("settings", "dev", "getuuid", "<username>"))
-        source.sendFeedback(helpLine("settings", "dev", "getdiscord", "<username>"))
-        source.sendFeedback(helpLine("settings", "dev", "animateddebug", "true/false"))
-        source.sendFeedback(helpLine("settings", "dev", "animateduncached", "true/false"))
+        source.sendFeedback(helpLine("dev", "assumepartyleader", "true/false"))
+        source.sendFeedback(helpLine("dev", "versioninfo"))
+        source.sendFeedback(helpLine("dev", "sethypixelapikey", "<key>"))
+        source.sendFeedback(helpLine("dev", "getuuid", "<username>"))
+        source.sendFeedback(helpLine("dev", "getdiscord", "<username>"))
+        source.sendFeedback(helpLine("dev", "togglecapes"))
+        source.sendFeedback(helpLine("dev", "togglescale"))
+        source.sendFeedback(helpLine("dev", "disablecapes"))
+        source.sendFeedback(helpLine("dev", "disablescaler"))
         source.sendFeedback(helpLine("updatecosmetics"))
         source.sendFeedback(helpLine("help"))
         return Command.SINGLE_SUCCESS
@@ -144,23 +161,23 @@ object SkylistBaseCommandHandler {
         return Command.SINGLE_SUCCESS
     }
 
-    private fun updateAnimatedDebug(context: CommandContext<FabricClientCommandSource>, enabled: Boolean): Int {
-        NameStyler.setAnimatedNameDebugEnabled(enabled)
+    private fun toggleCustomCapes(context: CommandContext<FabricClientCommandSource>): Int {
+        val disabled = ConfigManager.toggleCustomCapesDisabled()
         context.source.sendFeedback(
             tlMessage(
-                Text.literal("Animated name debug is now ").formatted(Formatting.GREEN)
-                    .append(Text.literal(enabled.toString().uppercase()).formatted(if (enabled) Formatting.GREEN else Formatting.RED)),
+                Text.literal("Custom cape cosmetics are now ").formatted(Formatting.GREEN)
+                    .append(Text.literal(if (disabled) "DISABLED" else "ENABLED").formatted(if (disabled) Formatting.RED else Formatting.GREEN)),
             ),
         )
         return Command.SINGLE_SUCCESS
     }
 
-    private fun updateAnimatedUncached(context: CommandContext<FabricClientCommandSource>, enabled: Boolean): Int {
-        NameStyler.setForceAnimatedNameUncached(enabled)
+    private fun toggleCustomScaler(context: CommandContext<FabricClientCommandSource>): Int {
+        val disabled = ConfigManager.toggleCustomScalerDisabled()
         context.source.sendFeedback(
             tlMessage(
-                Text.literal("Animated name uncached mode is now ").formatted(Formatting.GREEN)
-                    .append(Text.literal(enabled.toString().uppercase()).formatted(if (enabled) Formatting.GREEN else Formatting.RED)),
+                Text.literal("Custom player scaler is now ").formatted(Formatting.GREEN)
+                    .append(Text.literal(if (disabled) "DISABLED" else "ENABLED").formatted(if (disabled) Formatting.RED else Formatting.GREEN)),
             ),
         )
         return Command.SINGLE_SUCCESS
@@ -224,8 +241,8 @@ object SkylistBaseCommandHandler {
                                 Text.literal(resolved.uuid)
                                     .formatted(Formatting.AQUA, Formatting.UNDERLINE)
                                     .styled {
-                                        it.withClickEvent(ClickEvent.OpenUrl(URI.create("https://sky.shiiyu.moe/stats/${resolved.username}")))
-                                            .withHoverEvent(HoverEvent.ShowText(Text.literal("Open ${resolved.username} on SkyCrypt")))
+                                        it.withClickEvent(ClickEvent.CopyToClipboard(resolved.uuid))
+                                            .withHoverEvent(HoverEvent.ShowText(Text.literal("Copy UUID")))
                                     },
                             ),
                     ),
@@ -429,6 +446,10 @@ object SkylistBaseCommandHandler {
                         segment.equals("sethypixelapikey", ignoreCase = true) -> Formatting.GOLD
                         segment.equals("getuuid", ignoreCase = true) -> Formatting.AQUA
                         segment.equals("getdiscord", ignoreCase = true) -> Formatting.AQUA
+                        segment.equals("togglecapes", ignoreCase = true) -> Formatting.YELLOW
+                        segment.equals("togglescale", ignoreCase = true) -> Formatting.YELLOW
+                        segment.equals("disablecapes", ignoreCase = true) -> Formatting.YELLOW
+                        segment.equals("disablescaler", ignoreCase = true) -> Formatting.YELLOW
                         segment.equals("updatecosmetics", ignoreCase = true) -> Formatting.GREEN
                         segment.equals("true/false", ignoreCase = true) -> Formatting.GRAY
                         segment.startsWith("<") && segment.endsWith(">") -> Formatting.GRAY

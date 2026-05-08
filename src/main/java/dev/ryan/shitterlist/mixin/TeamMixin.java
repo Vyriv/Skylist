@@ -19,7 +19,7 @@ public abstract class TeamMixin {
             return;
         }
 
-        Text styled = NameStyler.INSTANCE.applyScoreboardDecorations(current);
+        Text styled = NameStyler.INSTANCE.applyScoreboardDisplayDecorations(current);
         if (styled != current) {
             cir.setReturnValue((MutableText) styled);
         }
@@ -36,7 +36,7 @@ public abstract class TeamMixin {
             return;
         }
 
-        Text styled = NameStyler.INSTANCE.applyScoreboardDecorations(current);
+        Text styled = NameStyler.INSTANCE.applyScoreboardDisplayDecorations(current);
         if (styled != current) {
             cir.setReturnValue((MutableText) styled);
         }

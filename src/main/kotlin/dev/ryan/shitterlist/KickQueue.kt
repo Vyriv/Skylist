@@ -13,22 +13,31 @@ class KickQueue(
 ) {
     private val scheduler = Executors.newSingleThreadScheduledExecutor()
     private val queue = ConcurrentLinkedQueue<KickTarget>()
+    private val lock = Any()
 
     @Volatile
     private var activeTarget: KickTarget? = null
 
-    fun enqueue(target: KickTarget) {
-        if (queue.any { it.uuid.equals(target.uuid, ignoreCase = true) } || activeTarget?.uuid.equals(target.uuid, ignoreCase = true)) {
-            return
-        }
+    @Volatile
+    private var lastKickCommandAtMillis = 0L
 
-        queue.add(target)
-        processNext()
+    fun enqueue(target: KickTarget) {
+        synchronized(lock) {
+            if (queue.any { it.uuid.equals(target.uuid, ignoreCase = true) } || activeTarget?.uuid.equals(target.uuid, ignoreCase = true)) {
+                return
+            }
+
+            queue.add(target)
+            processNextLocked()
+        }
     }
 
     fun clear() {
-        queue.clear()
-        activeTarget = null
+        synchronized(lock) {
+            queue.clear()
+            activeTarget = null
+            lastKickCommandAtMillis = 0L
+        }
     }
 
     fun handleChatMessage(message: String) {
@@ -47,6 +56,12 @@ class KickQueue(
     }
 
     private fun processNext() {
+        synchronized(lock) {
+            processNextLocked()
+        }
+    }
+
+    private fun processNextLocked() {
         if (activeTarget != null) {
             return
         }
@@ -62,9 +77,10 @@ class KickQueue(
 
         scheduler.schedule({
             client.execute {
+                lastKickCommandAtMillis = System.currentTimeMillis()
                 sendCommand("p kick ${next.username}")
             }
-        }, 650, TimeUnit.MILLISECONDS)
+        }, nextKickDelayMillis(), TimeUnit.MILLISECONDS)
 
         scheduler.schedule({
             client.execute {
@@ -72,7 +88,10 @@ class KickQueue(
                 if (stillPresent) {
                     failCurrentKick(next)
                 } else {
-                    activeTarget = null
+                    synchronized(lock) {
+                        activeTarget = null
+                    }
+                    next.onSuccess?.invoke()
                     processNext()
                 }
             }
@@ -81,10 +100,24 @@ class KickQueue(
 
     private fun failCurrentKick(target: KickTarget) {
         client.player?.sendMessage(Text.literal("Could not kick user!"), false)
-        if (activeTarget?.uuid.equals(target.uuid, ignoreCase = true)) {
-            activeTarget = null
+        val shouldFail = synchronized(lock) {
+            if (activeTarget?.uuid.equals(target.uuid, ignoreCase = true)) {
+                activeTarget = null
+                true
+            } else {
+                false
+            }
+        }
+        if (shouldFail) {
+            target.onFailure?.invoke()
             processNext()
         }
+    }
+
+    private fun nextKickDelayMillis(): Long {
+        val elapsedSinceLastKick = System.currentTimeMillis() - lastKickCommandAtMillis
+        val cooldownDelay = (kickCommandCooldownMillis - elapsedSinceLastKick).coerceAtLeast(0L)
+        return kickCommandBaseDelayMillis.coerceAtLeast(cooldownDelay)
     }
 
     private fun sendCommand(command: String) {
@@ -101,5 +134,12 @@ class KickQueue(
         val reason: String,
         val isRemote: Boolean,
         val partyMessage: String? = null,
+        val onSuccess: (() -> Unit)? = null,
+        val onFailure: (() -> Unit)? = null,
     )
+
+    companion object {
+        private const val kickCommandBaseDelayMillis = 650L
+        private const val kickCommandCooldownMillis = 1_000L
+    }
 }

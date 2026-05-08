@@ -50,7 +50,7 @@ public abstract class InGameHudMixin {
                 return;
             }
 
-            Text styledName = NameStyler.INSTANCE.applyScoreboardDecorations(currentName);
+            Text styledName = NameStyler.INSTANCE.applyScoreboardDisplayDecorations(currentName);
             if (styledName == currentName) {
                 return;
             }
@@ -75,7 +75,7 @@ public abstract class InGameHudMixin {
             return text;
         }
 
-        Text styled = NameStyler.INSTANCE.applyScoreboardDecorations(text);
+        Text styled = NameStyler.INSTANCE.applyScoreboardDisplayDecorations(text);
         return styled != text ? styled : text;
     }
 

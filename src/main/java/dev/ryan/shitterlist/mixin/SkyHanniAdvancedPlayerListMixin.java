@@ -52,7 +52,7 @@ public abstract class SkyHanniAdvancedPlayerListMixin {
             return text;
         }
 
-        Text styled = NameStyler.INSTANCE.applyNameplateDecorations(text);
+        Text styled = NameStyler.INSTANCE.applyNameplateDisplayDecorations(text);
         return styled != text ? styled : text;
     }
 }

@@ -148,6 +148,7 @@ object ContentManager {
         val resolvedScaleZ = entry.scaleZ ?: resolvedDepthBlocks?.div(playerDepthBlocks)
         return LoadedPlayerCustomization(
             username = entry.username,
+            nickname = entry.nickname?.trim()?.takeIf { it.isNotEmpty() },
             uuid = entry.uuid?.trim()?.takeIf { it.isNotEmpty() },
             aliases = entry.aliases,
             style = nameStyle,
@@ -187,6 +188,8 @@ object ContentManager {
         val normalizedMode = style.mode.trim().lowercase()
         val animationSpeed = style.animationSpeed?.takeIf { it > 0f }
         val animationSteps = style.animationSteps?.coerceAtLeast(2)
+        val gradientSpacing = (style.gradientFrequency ?: style.gradientSpacing)?.coerceIn(1.0f, 10.0f) ?: 1.0f
+        val animated = style.animated == true
 
         return when (normalizedMode) {
             "inherit_rank", "inherit-rank", "inherit" ->
@@ -201,12 +204,13 @@ object ContentManager {
                 val left = parseColor(style.leftColor ?: style.color) ?: return null
                 val right = parseColor(style.rightColor ?: style.color) ?: return null
                 LoadedNameStyle(
-                    mode = if (animationSpeed != null) LoadedNameStyle.Mode.ANIMATED_GRADIENT else LoadedNameStyle.Mode.GRADIENT,
+                    mode = if (animated || animationSpeed != null) LoadedNameStyle.Mode.ANIMATED_GRADIENT else LoadedNameStyle.Mode.GRADIENT,
                     leftColor = left,
                     rightColor = right,
                     bold = style.bold,
                     animationSpeed = animationSpeed,
                     animationSteps = animationSteps,
+                    gradientSpacing = gradientSpacing,
                 )
             }
 
@@ -220,6 +224,7 @@ object ContentManager {
                     bold = style.bold,
                     animationSpeed = animationSpeed,
                     animationSteps = animationSteps,
+                    gradientSpacing = gradientSpacing,
                 )
             }
 
@@ -413,6 +418,7 @@ object ContentManager {
 
     data class LoadedPlayerCustomization(
         val username: String,
+        val nickname: String?,
         val uuid: String?,
         val aliases: List<String>,
         val style: LoadedNameStyle?,
@@ -433,6 +439,7 @@ object ContentManager {
         val letterColors: List<Int>? = null,
         val animationSpeed: Float? = null,
         val animationSteps: Int? = null,
+        val gradientSpacing: Float = 1.0f,
     ) {
         enum class Mode {
             INHERIT_RANK,
@@ -472,6 +479,7 @@ object ContentManager {
 
     data class PlayerCustomizationFile(
         var username: String = "",
+        var nickname: String? = null,
         var uuid: String? = null,
         var aliases: MutableList<String> = mutableListOf(),
         var creditLabel: String? = null,
@@ -495,8 +503,11 @@ object ContentManager {
         var leftColor: String? = null,
         var rightColor: String? = null,
         var letterColors: MutableList<String>? = null,
+        var animated: Boolean? = null,
         var animationSpeed: Float? = null,
         var animationSteps: Int? = null,
+        var gradientSpacing: Float? = null,
+        var gradientFrequency: Float? = null,
         var bold: Boolean = false,
     )
 

@@ -5,6 +5,7 @@ import kotlin.math.floor
 class AnimatedGradientStyle(
     val steps: IntArray,
     val speed: Float,
+    val spacing: Float,
 ) {
     fun offsetAt(time: Double): Float {
         if (steps.isEmpty()) {
@@ -14,12 +15,15 @@ class AnimatedGradientStyle(
         return positiveModulo(time * speed.toDouble(), steps.size.toDouble()).toFloat()
     }
 
-    fun getColor(charIndex: Int, time: Double): Int {
+    fun getColor(charIndex: Int, characterCount: Int, time: Double): Int {
         if (steps.isEmpty()) {
             return 0
         }
 
-        val wrapped = positiveModulo(charIndex.toDouble() + offsetAt(time).toDouble(), steps.size.toDouble())
+        val normalizedPosition = if (characterCount <= 1) 0.0 else charIndex.toDouble() / (characterCount - 1).toDouble()
+        val normalizedOffset = offsetAt(time).toDouble() / steps.size.toDouble()
+        val normalized = positiveModulo((normalizedPosition * spacing.toDouble()) + normalizedOffset, 1.0)
+        val wrapped = normalized * steps.size.toDouble()
         val baseIndex = floor(wrapped).toInt()
         val nextIndex = (baseIndex + 1) % steps.size
         val blend = (wrapped - baseIndex).toFloat()
@@ -52,6 +56,7 @@ class AnimatedGradientStyle(
         }
 
         private fun interpolate(start: Int, end: Int, progress: Float): Int {
+            val clamped = progress.coerceIn(0f, 1f)
             val startR = (start shr 16) and 0xFF
             val startG = (start shr 8) and 0xFF
             val startB = start and 0xFF
@@ -60,9 +65,9 @@ class AnimatedGradientStyle(
             val endG = (end shr 8) and 0xFF
             val endB = end and 0xFF
 
-            val r = (startR + ((endR - startR) * progress)).toInt().coerceIn(0, 255)
-            val g = (startG + ((endG - startG) * progress)).toInt().coerceIn(0, 255)
-            val b = (startB + ((endB - startB) * progress)).toInt().coerceIn(0, 255)
+            val r = (startR + ((endR - startR) * clamped)).toInt().coerceIn(0, 255)
+            val g = (startG + ((endG - startG) * clamped)).toInt().coerceIn(0, 255)
+            val b = (startB + ((endB - startB) * clamped)).toInt().coerceIn(0, 255)
 
             return (r shl 16) or (g shl 8) or b
         }

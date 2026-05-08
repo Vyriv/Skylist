@@ -18,11 +18,11 @@ public abstract class PlayerListHudMixin {
         if (current == null) {
             return;
         }
-        if (!NameStyler.INSTANCE.hasStyledProfile(entry.getProfile())) {
+        if (!NameStyler.INSTANCE.hasDisplayProfile(entry.getProfile())) {
             return;
         }
 
-        Text styled = NameStyler.INSTANCE.applyNameplateDecorations(current);
+        Text styled = NameStyler.INSTANCE.applyNameplateDisplayDecorations(current);
         if (styled != current) {
             cir.setReturnValue(styled);
         }
@@ -41,7 +41,7 @@ public abstract class PlayerListHudMixin {
             return text;
         }
 
-        Text styled = NameStyler.INSTANCE.applyNameplateDecorations(text);
+        Text styled = NameStyler.INSTANCE.applyNameplateDisplayDecorations(text);
         return styled != text ? styled : text;
     }
 }

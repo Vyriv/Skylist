@@ -166,6 +166,26 @@ object ConfigManager {
     }
 
     @Synchronized
+    fun isCustomCapesEnabled(): Boolean = !settings.customCapesDisabled
+
+    @Synchronized
+    fun toggleCustomCapesDisabled(): Boolean {
+        settings.customCapesDisabled = !settings.customCapesDisabled
+        save()
+        return settings.customCapesDisabled
+    }
+
+    @Synchronized
+    fun isCustomScalerEnabled(): Boolean = !settings.customScalerDisabled
+
+    @Synchronized
+    fun toggleCustomScalerDisabled(): Boolean {
+        settings.customScalerDisabled = !settings.customScalerDisabled
+        save()
+        return settings.customScalerDisabled
+    }
+
+    @Synchronized
     fun getHypixelApiKey(): String? = settings.hypixelApiKey?.takeIf { it.isNotBlank() }
 
     @Synchronized
@@ -350,6 +370,26 @@ object ConfigManager {
         settings.dungeonAutokick.thornsOnEquippedArmourSet = enabled
         save()
         return isDungeonThornsOnEquippedArmourEnabled()
+    }
+
+    @Synchronized
+    fun isDungeonRouterCheckEnabled(): Boolean = settings.dungeonAutokick.checkForRouters
+
+    @Synchronized
+    fun setDungeonRouterCheckEnabled(enabled: Boolean): Boolean {
+        settings.dungeonAutokick.checkForRouters = enabled
+        save()
+        return isDungeonRouterCheckEnabled()
+    }
+
+    @Synchronized
+    fun getDungeonRouterAction(): String = normalizeDungeonRouterAction(settings.dungeonAutokick.routerAction)
+
+    @Synchronized
+    fun setDungeonRouterAction(value: String): String {
+        settings.dungeonAutokick.routerAction = normalizeDungeonRouterAction(value)
+        save()
+        return getDungeonRouterAction()
     }
 
     @Synchronized
@@ -713,6 +753,11 @@ object ConfigManager {
             ScammerListManager.ScammerSeverity.entries.firstOrNull { it.name == raw }
         }
 
+    private fun normalizeDungeonRouterAction(value: String?): String =
+        value?.trim()?.uppercase(Locale.ROOT)
+            ?.takeIf { it == "NOTHING" || it == "WARN" || it == "KICK" }
+            ?: "WARN"
+
     private fun MutableMap<String, String?>.normalizedValue(floor: String): String? =
         get(floor.trim().uppercase())?.trim()?.takeIf { it.isNotEmpty() }
 
@@ -847,6 +892,8 @@ object ConfigManager {
         var remoteAutokickTemplate: String? = defaultRemoteAutokickTemplate,
         var lobbyNotifications: Boolean = true,
         var assumePartyLeader: Boolean = false,
+        var customCapesDisabled: Boolean = false,
+        var customScalerDisabled: Boolean = false,
         var hypixelApiKey: String? = null,
         var uiTheme: String? = "ocean",
         var remoteScammerChecksEnabled: Boolean? = true,
@@ -873,6 +920,8 @@ object ConfigManager {
         var noPrinceAttributeShard: Boolean = false,
         var noSpiritPet: Boolean = false,
         var thornsOnEquippedArmourSet: Boolean = false,
+        var checkForRouters: Boolean = false,
+        var routerAction: String = "WARN",
     ) {
         fun normalized(): DungeonAutokickSettings {
             pbThresholds = pbThresholds.entries
@@ -881,6 +930,9 @@ object ConfigManager {
                     normalizedKey to value?.trim()?.takeIf { it.isNotEmpty() }
                 }
                 .associateTo(linkedMapOf()) { it }
+            routerAction = routerAction.trim().uppercase(Locale.ROOT)
+                .takeIf { it == "NOTHING" || it == "WARN" || it == "KICK" }
+                ?: "WARN"
             return this
         }
 

@@ -1,6 +1,7 @@
 package dev.ryan.throwerlist.mixin;
 
 import dev.ryan.throwerlist.CustomScaleState;
+import dev.ryan.throwerlist.ConfigManager;
 import dev.ryan.throwerlist.PlayerCustomizationRegistry;
 import net.minecraft.client.render.entity.LivingEntityRenderer;
 import net.minecraft.client.render.entity.state.LivingEntityRenderState;
@@ -22,6 +23,9 @@ public abstract class LivingEntityRendererMixin<T extends LivingEntity, S extend
 
         CustomScaleState customScaleState = (CustomScaleState) state;
         customScaleState.throwerlist$clearCustomScale();
+        if (!ConfigManager.INSTANCE.isCustomScalerEnabled()) {
+            return;
+        }
         if (!PlayerCustomizationRegistry.INSTANCE.hasScaleCustomizations()) {
             return;
         }

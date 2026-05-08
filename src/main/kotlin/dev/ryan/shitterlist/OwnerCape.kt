@@ -43,6 +43,9 @@ object OwnerCape {
         if (skinTextures == null) {
             return null
         }
+        if (!ConfigManager.isCustomCapesEnabled()) {
+            return skinTextures
+        }
         if (!PlayerCustomizationRegistry.hasCapeCustomizations()) {
             return skinTextures
         }

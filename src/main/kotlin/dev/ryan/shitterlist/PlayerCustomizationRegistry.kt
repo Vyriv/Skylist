@@ -21,6 +21,7 @@ object PlayerCustomizationRegistry {
     data class NameColors(
         val left: Int,
         val right: Int,
+        val spacing: Float = 1.0f,
     ) {
         companion object {
             fun solid(color: Int) = NameColors(color, color)
@@ -29,6 +30,7 @@ object PlayerCustomizationRegistry {
 
     data class PlayerCustomization(
         val username: String,
+        val nickname: String? = null,
         val uuid: UUID? = null,
         val aliases: List<String> = emptyList(),
         val nameColors: NameColors? = null,
@@ -48,6 +50,7 @@ object PlayerCustomizationRegistry {
         val explicitNameColors: Boolean = nameColors != null || !nameLetterColors.isNullOrEmpty()
         val animatedGradient: Boolean = nameAnimated && nameColors?.let { it.left != it.right } == true
         val hasBadge: Boolean = nameBadge != null
+        val hasNickname: Boolean = !nickname.isNullOrBlank()
         val hasDecorations: Boolean = explicitNameColors || nameBold || hasBadge
 
         @Volatile
@@ -82,6 +85,7 @@ object PlayerCustomizationRegistry {
             if (username.isNotBlank() && none { it.equals(username, ignoreCase = true) }) {
                 add(username)
             }
+            nickname?.trim()?.takeIf { it.isNotEmpty() && none { existing -> existing.equals(it, ignoreCase = true) } }?.let(::add)
             aliases.forEach { alias ->
                 if (none { it.equals(alias, ignoreCase = true) }) {
                     add(alias)
@@ -92,6 +96,10 @@ object PlayerCustomizationRegistry {
         fun hasExplicitNameColors(): Boolean = explicitNameColors
 
         fun hasNameCustomization(): Boolean = hasDecorations
+
+        fun hasChatDisplayOverride(): Boolean = hasDecorations || hasNickname
+
+        fun displayName(matchedName: String): String = nickname?.takeIf { it.isNotBlank() } ?: matchedName
 
         fun hasCapeCustomization(): Boolean =
             !capeResourcePath.isNullOrBlank() || !capeUrl.isNullOrBlank()
@@ -114,8 +122,11 @@ object PlayerCustomizationRegistry {
         val byName: Map<String, PlayerCustomization>,
         val byUuid: Map<UUID, PlayerCustomization>,
         val allNameCandidates: List<NameCandidate>,
+        val nameplateDisplayCandidates: List<NameCandidate>,
+        val chatHeaderNameCandidates: List<NameCandidate>,
         val styledNameCandidates: List<NameCandidate>,
         val gradientNameCandidates: List<NameCandidate>,
+        val scoreboardDisplayNameCandidates: List<NameCandidate>,
         val scoreboardStyledNameCandidates: List<NameCandidate>,
         val scoreboardGradientNameCandidates: List<NameCandidate>,
         val hasCapeCustomizations: Boolean,
@@ -128,8 +139,11 @@ object PlayerCustomizationRegistry {
                 byName = emptyMap(),
                 byUuid = emptyMap(),
                 allNameCandidates = emptyList(),
+                nameplateDisplayCandidates = emptyList(),
+                chatHeaderNameCandidates = emptyList(),
                 styledNameCandidates = emptyList(),
                 gradientNameCandidates = emptyList(),
+                scoreboardDisplayNameCandidates = emptyList(),
                 scoreboardStyledNameCandidates = emptyList(),
                 scoreboardGradientNameCandidates = emptyList(),
                 hasCapeCustomizations = false,
@@ -158,8 +172,17 @@ object PlayerCustomizationRegistry {
     val styledNameCandidates: List<NameCandidate>
         get() = snapshot.styledNameCandidates
 
+    val chatHeaderNameCandidates: List<NameCandidate>
+        get() = snapshot.chatHeaderNameCandidates
+
+    val nameplateDisplayCandidates: List<NameCandidate>
+        get() = snapshot.nameplateDisplayCandidates
+
     val gradientNameCandidates: List<NameCandidate>
         get() = snapshot.gradientNameCandidates
+
+    val scoreboardDisplayNameCandidates: List<NameCandidate>
+        get() = snapshot.scoreboardDisplayNameCandidates
 
     val scoreboardStyledNameCandidates: List<NameCandidate>
         get() = snapshot.scoreboardStyledNameCandidates
@@ -226,6 +249,24 @@ object PlayerCustomizationRegistry {
     fun findByName(name: String?): PlayerCustomization? =
         normalizedNameKey(name)?.let { snapshot.byName[it] }
 
+    fun findByNickname(name: String?): PlayerCustomization? {
+        val normalized = normalizedNameKey(name) ?: return null
+        return snapshot.entries.firstOrNull { entry ->
+            entry.nickname?.trim()?.lowercase(Locale.ROOT) == normalized
+        }
+    }
+
+    fun resolveOutgoingNameAlias(name: String?): String? {
+        val normalized = normalizedNameKey(name) ?: return null
+        val customization = snapshot.entries.firstOrNull { entry ->
+            entry.nickname?.trim()?.lowercase(Locale.ROOT) == normalized ||
+                entry.aliases.any { alias -> alias.trim().lowercase(Locale.ROOT) == normalized }
+        } ?: return null
+
+        return customization.syncedUsername
+            ?: customization.username.trim().takeIf { it.isNotEmpty() }
+    }
+
     fun findWithCape(profile: GameProfile?): PlayerCustomization? =
         find(profile)?.takeIf { it.hasCapeCustomization() }
 
@@ -242,8 +283,11 @@ object PlayerCustomizationRegistry {
         val byName = linkedMapOf<String, PlayerCustomization>()
         val byUuid = linkedMapOf<UUID, PlayerCustomization>()
         val allNameCandidates = mutableListOf<NameCandidate>()
+        val nameplateDisplayCandidates = mutableListOf<NameCandidate>()
+        val chatHeaderNameCandidates = mutableListOf<NameCandidate>()
         val styledNameCandidates = mutableListOf<NameCandidate>()
         val gradientNameCandidates = mutableListOf<NameCandidate>()
+        val scoreboardDisplayNameCandidates = mutableListOf<NameCandidate>()
         val scoreboardStyledNameCandidates = mutableListOf<NameCandidate>()
         val scoreboardGradientNameCandidates = mutableListOf<NameCandidate>()
 
@@ -263,6 +307,11 @@ object PlayerCustomizationRegistry {
                 .map { NameCandidate(customization, it) }
 
             allNameCandidates.addAll(exactCandidates)
+            if (customization.hasChatDisplayOverride()) {
+                nameplateDisplayCandidates.addAll(exactCandidates)
+                chatHeaderNameCandidates.addAll(exactCandidates)
+                scoreboardDisplayNameCandidates.addAll(scoreboardCandidates(customization, names))
+            }
             if (customization.hasNameCustomization()) {
                 styledNameCandidates.addAll(exactCandidates)
                 scoreboardStyledNameCandidates.addAll(scoreboardCandidates(customization, names))
@@ -279,8 +328,11 @@ object PlayerCustomizationRegistry {
             byName = byName,
             byUuid = byUuid,
             allNameCandidates = allNameCandidates,
+            nameplateDisplayCandidates = nameplateDisplayCandidates,
+            chatHeaderNameCandidates = chatHeaderNameCandidates,
             styledNameCandidates = styledNameCandidates,
             gradientNameCandidates = gradientNameCandidates,
+            scoreboardDisplayNameCandidates = scoreboardDisplayNameCandidates,
             scoreboardStyledNameCandidates = scoreboardStyledNameCandidates,
             scoreboardGradientNameCandidates = scoreboardGradientNameCandidates,
             hasCapeCustomizations = effectiveEntries.any { it.hasCapeCustomization() },
@@ -354,6 +406,7 @@ object PlayerCustomizationRegistry {
             ?: syncedUsername
             ?: username
         val resolvedUuid = overlay.syncedUuid ?: overlay.uuid ?: syncedUuid ?: uuid
+        val resolvedNickname = overlay.nickname?.takeIf { it.isNotBlank() } ?: nickname
         val mergedAliases = buildList {
             aliases.forEach(::add)
             overlay.aliases.forEach(::add)
@@ -367,6 +420,7 @@ object PlayerCustomizationRegistry {
 
         val merged = PlayerCustomization(
             username = resolvedUsername,
+            nickname = resolvedNickname,
             uuid = resolvedUuid,
             aliases = mergedAliases,
             nameColors = overlay.nameColors ?: nameColors,
@@ -411,7 +465,7 @@ object PlayerCustomizationRegistry {
             ContentManager.LoadedNameStyle.Mode.ANIMATED_GRADIENT -> {
                 val left = entry.style.leftColor ?: return null
                 val right = entry.style.rightColor ?: left
-                NameColors(left = left, right = right)
+                NameColors(left = left, right = right, spacing = entry.style.gradientSpacing)
             }
 
             else -> null
@@ -431,6 +485,7 @@ object PlayerCustomizationRegistry {
 
         return PlayerCustomization(
             username = normalizedUsername,
+            nickname = entry.nickname,
             uuid = uuid,
             aliases = entry.aliases,
             nameColors = nameColors,

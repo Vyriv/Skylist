@@ -22,7 +22,7 @@ public abstract class SkyHanniScoreboardEventDungeonsMixin {
         List<String> decorated = null;
         for (int index = 0; index < current.size(); index++) {
             String line = current.get(index);
-            String styled = NameStyler.INSTANCE.applyScoreboardDecorationsToString(line);
+            String styled = NameStyler.INSTANCE.applyScoreboardDisplayDecorationsToString(line);
             if (styled == line) {
                 if (decorated != null) {
                     decorated.add(line);

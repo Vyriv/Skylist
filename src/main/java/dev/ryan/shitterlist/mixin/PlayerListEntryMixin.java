@@ -25,11 +25,11 @@ public abstract class PlayerListEntryMixin {
         if (current == null) {
             return;
         }
-        if (!NameStyler.INSTANCE.hasStyledProfile(this.profile)) {
+        if (!NameStyler.INSTANCE.hasDisplayProfile(this.profile)) {
             return;
         }
 
-        Text styled = NameStyler.INSTANCE.applyNameplateDecorations(current);
+        Text styled = NameStyler.INSTANCE.applyNameplateDisplayDecorations(current);
         if (styled != current) {
             cir.setReturnValue(styled);
         }
@@ -45,8 +45,8 @@ public abstract class PlayerListEntryMixin {
         }
 
         Text current = text;
-        if (NameStyler.INSTANCE.hasStyledProfile(this.profile)) {
-            current = NameStyler.INSTANCE.applyNameplateDecorations(current);
+        if (NameStyler.INSTANCE.hasDisplayProfile(this.profile)) {
+            current = NameStyler.INSTANCE.applyNameplateDisplayDecorations(current);
         }
         if (current == text) {
             return;

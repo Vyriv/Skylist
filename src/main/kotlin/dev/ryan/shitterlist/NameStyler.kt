@@ -31,12 +31,16 @@ object NameStyler {
     private enum class TransformKind {
         GRADIENT_TEXT,
         NAMEPLATE_TEXT,
+        NAMEPLATE_DISPLAY_TEXT,
         SCOREBOARD_TEXT,
+        SCOREBOARD_DISPLAY_TEXT,
         SIDEBAR_TEXT,
         CHAT_HEADER_TEXT,
         GRADIENT_STRING,
         DECORATED_STRING,
+        DECORATED_DISPLAY_STRING,
         SCOREBOARD_STRING,
+        SCOREBOARD_DISPLAY_STRING,
     }
 
     private data class ColorizedCacheKey(
@@ -50,6 +54,7 @@ object NameStyler {
         val rightColor: Int,
         val stepsCount: Int,
         val speedBits: Int,
+        val spacingBits: Int,
     )
 
     private data class StyledSegment(
@@ -92,12 +97,14 @@ object NameStyler {
         val gradientPlan: OrderedTextTransformPlan?,
         val nameplatePlan: OrderedTextTransformPlan?,
         val scoreboardPlan: OrderedTextTransformPlan?,
+        val chatHeaderPlan: OrderedTextTransformPlan?,
     ) {
         fun planFor(kind: TransformKind): OrderedTextTransformPlan? =
             when (kind) {
                 TransformKind.GRADIENT_TEXT -> gradientPlan
                 TransformKind.NAMEPLATE_TEXT -> nameplatePlan
                 TransformKind.SCOREBOARD_TEXT -> scoreboardPlan
+                TransformKind.CHAT_HEADER_TEXT -> chatHeaderPlan
                 else -> null
             }
     }
@@ -377,8 +384,13 @@ object NameStyler {
 
     fun hasGradientStyles(): Boolean = PlayerCustomizationRegistry.gradientNameCandidates.isNotEmpty()
 
+    fun hasChatHeaderStyles(): Boolean = PlayerCustomizationRegistry.chatHeaderNameCandidates.isNotEmpty()
+
     fun hasStyledProfile(profile: GameProfile?): Boolean =
         PlayerCustomizationRegistry.find(profile)?.hasNameCustomization() == true
+
+    fun hasDisplayProfile(profile: GameProfile?): Boolean =
+        PlayerCustomizationRegistry.find(profile)?.hasChatDisplayOverride() == true
 
     fun hasAnimatedStyledProfile(profile: GameProfile?): Boolean =
         PlayerCustomizationRegistry.find(profile)?.hasAnimatedGradient() == true
@@ -470,6 +482,24 @@ object NameStyler {
 
     fun applyNameplateDecorations(raw: String): Text = rebuildVisitable(parseLegacyFormattedText(raw), includeBadges = true)
 
+    fun applyNameplateDisplayDecorations(message: Text): Text =
+        applyCachedTextTransform(message, TransformKind.NAMEPLATE_DISPLAY_TEXT) {
+            rebuildDecorationsAcrossSegments(
+                normalizeLegacyText(it),
+                includeBadges = true,
+                replaceMatchedName = true,
+            ) ?: it
+        }
+
+    fun applyNameplateDisplayDecorations(raw: String): Text {
+        val parsed = parseLegacyFormattedText(raw)
+        return rebuildDecorationsAcrossSegments(
+            parsed,
+            includeBadges = true,
+            replaceMatchedName = true,
+        ) ?: parsed
+    }
+
     fun applyScoreboardDecorations(message: Text): Text =
         applyCachedTextTransform(message, TransformKind.SCOREBOARD_TEXT) {
             rebuildDecorationsAcrossSegments(
@@ -480,6 +510,17 @@ object NameStyler {
             ) ?: it
         }
 
+    fun applyScoreboardDisplayDecorations(message: Text): Text =
+        applyCachedTextTransform(message, TransformKind.SCOREBOARD_DISPLAY_TEXT) {
+            rebuildDecorationsAcrossSegments(
+                normalizeLegacyText(it),
+                includeBadges = true,
+                terminalBadgesOnly = true,
+                allowTruncatedPrefix = true,
+                replaceMatchedName = true,
+            ) ?: it
+        }
+
     fun applyScoreboardDecorations(raw: String): Text {
         val parsed = parseLegacyFormattedText(raw)
         return rebuildDecorationsAcrossSegments(
@@ -487,6 +528,17 @@ object NameStyler {
             includeBadges = true,
             terminalBadgesOnly = true,
             allowTruncatedPrefix = true,
+        ) ?: parsed
+    }
+
+    fun applyScoreboardDisplayDecorations(raw: String): Text {
+        val parsed = parseLegacyFormattedText(raw)
+        return rebuildDecorationsAcrossSegments(
+            parsed,
+            includeBadges = true,
+            terminalBadgesOnly = true,
+            allowTruncatedPrefix = true,
+            replaceMatchedName = true,
         ) ?: parsed
     }
 
@@ -509,7 +561,7 @@ object NameStyler {
 
     fun applyGradientToChatHeader(message: Text): Text =
         applyCachedTextTransform(message, TransformKind.CHAT_HEADER_TEXT) {
-            rebuildVisitable(normalizeLegacyText(it), chatHeaderOnly = true)
+            rebuildVisitable(normalizeLegacyText(it), chatHeaderOnly = true, replaceMatchedName = true)
         }
 
     fun applyGradientToVisitable(message: StringVisitable): StringVisitable = rebuildVisitable(message)
@@ -517,6 +569,16 @@ object NameStyler {
     fun applyGradientToOrderedText(text: OrderedText): OrderedText =
         applyCachedOrderedTextTransform(text, TransformKind.GRADIENT_TEXT) { source, animationTime ->
             rebuildOrderedTextFromPlan(source, source.gradientPlan ?: return@applyCachedOrderedTextTransform null, animationTime = animationTime)
+        }
+
+    fun applyChatHeaderToOrderedText(text: OrderedText): OrderedText =
+        applyCachedOrderedTextTransform(text, TransformKind.CHAT_HEADER_TEXT) { source, animationTime ->
+            rebuildOrderedTextFromPlan(
+                source,
+                source.chatHeaderPlan ?: return@applyCachedOrderedTextTransform null,
+                animationTime = animationTime,
+                replaceMatchedName = true,
+            )
         }
 
     fun applyNameplateDecorations(text: OrderedText): OrderedText =
@@ -569,6 +631,10 @@ object NameStyler {
         return applyDecorationsToString(raw, terminalBadgesOnly = true)
     }
 
+    fun applyScoreboardDisplayDecorationsToString(raw: String?): String? {
+        return applyDisplayDecorationsToString(raw, terminalBadgesOnly = true)
+    }
+
     private fun applyDecorationsToString(raw: String?, terminalBadgesOnly: Boolean): String? {
         if (raw.isNullOrEmpty()) {
             return raw
@@ -587,6 +653,29 @@ object NameStyler {
         val cacheKey = StringCacheKey(version, kind, raw)
         stringTransformCache.getCached(cacheKey)?.let { return it }
         val output = applyDecorationsToStringUncached(raw, terminalBadgesOnly)
+
+        stringTransformCache.putCached(cacheKey, output)
+        return output
+    }
+
+    private fun applyDisplayDecorationsToString(raw: String?, terminalBadgesOnly: Boolean): String? {
+        if (raw.isNullOrEmpty()) {
+            return raw
+        }
+
+        val kind = if (terminalBadgesOnly) TransformKind.SCOREBOARD_DISPLAY_STRING else TransformKind.DECORATED_DISPLAY_STRING
+        val version = currentRegistryVersion()
+        if (!containsForKind(raw, kind, version)) {
+            return raw
+        }
+
+        if (!shouldCacheFinalTransform(kind, raw)) {
+            return applyDisplayDecorationsToStringUncached(raw, terminalBadgesOnly)
+        }
+
+        val cacheKey = StringCacheKey(version, kind, raw)
+        stringTransformCache.getCached(cacheKey)?.let { return it }
+        val output = applyDisplayDecorationsToStringUncached(raw, terminalBadgesOnly)
 
         stringTransformCache.putCached(cacheKey, output)
         return output
@@ -682,19 +771,77 @@ object NameStyler {
         return output
     }
 
+    private fun applyDisplayDecorationsToStringUncached(raw: String, terminalBadgesOnly: Boolean): String {
+        var output: String = raw
+        PlayerCustomizationRegistry.entries.forEach { customization ->
+            if (!customization.hasChatDisplayOverride() || findNameMatch(output, customization, allowTruncatedPrefix = terminalBadgesOnly) == null) {
+                return@forEach
+            }
+
+            val rebuilt = StringBuilder()
+            var index = 0
+            while (index < output.length) {
+                val match = findNameMatch(output, customization, index, allowTruncatedPrefix = terminalBadgesOnly)
+                if (match == null) {
+                    rebuilt.append(output.substring(index))
+                    break
+                }
+
+                val matchIndex = match.index
+                if (matchIndex > index) {
+                    rebuilt.append(output.substring(index, matchIndex))
+                }
+
+                val matchedName = output.substring(matchIndex, matchIndex + match.matchedName.length)
+                val displayName = customization.displayName(matchedName)
+                val inheritedRankCodes = inheritedLegacyRankCodes(output, matchIndex, customization)
+                rebuilt.append(
+                    when {
+                        displayName != matchedName || customization.hasNameCustomization() ->
+                            toLegacyStyledName(displayName, customization, inheritedRankCodes)
+                        inheritedRankCodes.isNotEmpty() -> inheritedRankCodes + matchedName
+                        else -> matchedName
+                    },
+                )
+
+                customization.nameBadge?.takeUnless { badge ->
+                    hasBadgeImmediatelyAfter(output, matchIndex + match.matchedName.length, badge.text)
+                }?.let { badge ->
+                    if (terminalBadgesOnly && hasVisibleContentAfter(output, matchIndex + match.matchedName.length)) {
+                        return@let
+                    }
+                    rebuilt.append(' ')
+                    rebuilt.append(toLegacyColorCode(badge.color))
+                    if (badge.bold) {
+                        rebuilt.append(legacyFormat).append('l')
+                    }
+                    rebuilt.append(badge.text)
+                    rebuilt.append(legacyFormat).append('r')
+                    rebuilt.append(activeLegacyCodes(output, matchIndex))
+                }
+
+                index = matchIndex + match.matchedName.length
+            }
+
+            output = rebuilt.toString()
+        }
+        return output
+    }
+
     private fun styledSelfName(
         version: Long,
         matchedName: String,
         customization: PlayerCustomizationRegistry.PlayerCustomization,
     ): Text {
+        val displayName = customization.displayName(matchedName)
         if (customization.hasAnimatedGradient()) {
-            return appendBadge(cachedGradient(matchedName, customization), customization)
+            return appendBadge(cachedGradient(displayName, customization), customization)
         }
 
-        val cacheKey = SelfNameCacheKey(version, matchedName.lowercase(Locale.ROOT))
+        val cacheKey = SelfNameCacheKey(version, displayName.lowercase(Locale.ROOT))
         selfNameCache.getCached(cacheKey)?.let { return it }
 
-        val styled = appendBadge(cachedGradient(matchedName, customization), customization)
+        val styled = appendBadge(cachedGradient(displayName, customization), customization)
         selfNameCache.putCached(cacheKey, styled)
         return styled
     }
@@ -814,8 +961,8 @@ object NameStyler {
     private fun textIdentityCache(kind: TransformKind): IdentityCache<Text, Text> =
         when (kind) {
             TransformKind.GRADIENT_TEXT, TransformKind.GRADIENT_STRING -> gradientTextIdentityCache
-            TransformKind.NAMEPLATE_TEXT, TransformKind.DECORATED_STRING -> nameplateTextIdentityCache
-            TransformKind.SCOREBOARD_TEXT, TransformKind.SCOREBOARD_STRING -> scoreboardTextIdentityCache
+            TransformKind.NAMEPLATE_TEXT, TransformKind.NAMEPLATE_DISPLAY_TEXT, TransformKind.DECORATED_STRING, TransformKind.DECORATED_DISPLAY_STRING -> nameplateTextIdentityCache
+            TransformKind.SCOREBOARD_TEXT, TransformKind.SCOREBOARD_DISPLAY_TEXT, TransformKind.SCOREBOARD_STRING, TransformKind.SCOREBOARD_DISPLAY_STRING -> scoreboardTextIdentityCache
             TransformKind.SIDEBAR_TEXT -> sidebarTextIdentityCache
             TransformKind.CHAT_HEADER_TEXT -> chatHeaderTextIdentityCache
         }
@@ -823,8 +970,8 @@ object NameStyler {
     private fun orderedTextIdentityCache(kind: TransformKind): IdentityCache<OrderedText, OrderedText> =
         when (kind) {
             TransformKind.GRADIENT_TEXT, TransformKind.GRADIENT_STRING, TransformKind.CHAT_HEADER_TEXT -> gradientOrderedTextIdentityCache
-            TransformKind.NAMEPLATE_TEXT, TransformKind.DECORATED_STRING, TransformKind.SIDEBAR_TEXT -> nameplateOrderedTextIdentityCache
-            TransformKind.SCOREBOARD_TEXT, TransformKind.SCOREBOARD_STRING -> scoreboardOrderedTextIdentityCache
+            TransformKind.NAMEPLATE_TEXT, TransformKind.NAMEPLATE_DISPLAY_TEXT, TransformKind.DECORATED_STRING, TransformKind.DECORATED_DISPLAY_STRING, TransformKind.SIDEBAR_TEXT -> nameplateOrderedTextIdentityCache
+            TransformKind.SCOREBOARD_TEXT, TransformKind.SCOREBOARD_DISPLAY_TEXT, TransformKind.SCOREBOARD_STRING, TransformKind.SCOREBOARD_DISPLAY_STRING -> scoreboardOrderedTextIdentityCache
         }
 
     private fun cacheTextIdentity(kind: TransformKind, source: Text, result: Text) {
@@ -845,11 +992,18 @@ object NameStyler {
 
         val result = when (kind) {
             TransformKind.GRADIENT_TEXT,
-            TransformKind.GRADIENT_STRING,
-            TransformKind.CHAT_HEADER_TEXT -> containsCandidate(text, PlayerCustomizationRegistry.gradientNameCandidates)
+            TransformKind.GRADIENT_STRING -> containsCandidate(text, PlayerCustomizationRegistry.gradientNameCandidates)
+
+            TransformKind.NAMEPLATE_DISPLAY_TEXT,
+            TransformKind.CHAT_HEADER_TEXT -> containsCandidate(text, PlayerCustomizationRegistry.chatHeaderNameCandidates)
+
+            TransformKind.SCOREBOARD_DISPLAY_TEXT,
+            TransformKind.SCOREBOARD_DISPLAY_STRING -> containsCandidate(text, PlayerCustomizationRegistry.scoreboardDisplayNameCandidates)
 
             TransformKind.NAMEPLATE_TEXT,
             TransformKind.DECORATED_STRING -> containsCandidate(text, PlayerCustomizationRegistry.styledNameCandidates)
+
+            TransformKind.DECORATED_DISPLAY_STRING -> containsCandidate(text, PlayerCustomizationRegistry.nameplateDisplayCandidates)
 
             TransformKind.SCOREBOARD_TEXT,
             TransformKind.SCOREBOARD_STRING -> containsCandidate(text, PlayerCustomizationRegistry.scoreboardStyledNameCandidates)
@@ -949,6 +1103,7 @@ object NameStyler {
             gradientPlan = orderedTextPlan(version, runs, plain, styleHash, TransformKind.GRADIENT_TEXT),
             nameplatePlan = orderedTextPlan(version, runs, plain, styleHash, TransformKind.NAMEPLATE_TEXT),
             scoreboardPlan = orderedTextPlan(version, runs, plain, styleHash, TransformKind.SCOREBOARD_TEXT),
+            chatHeaderPlan = orderedTextPlan(version, runs, plain, styleHash, TransformKind.CHAT_HEADER_TEXT),
         )
         if (!bypassCache) {
             orderedTextSourceCache.put(text, source)
@@ -985,17 +1140,21 @@ object NameStyler {
             return null
         }
 
-        val includeBadges = kind != TransformKind.GRADIENT_TEXT
+        val includeBadges = kind != TransformKind.GRADIENT_TEXT && kind != TransformKind.CHAT_HEADER_TEXT
         val terminalBadgesOnly = kind == TransformKind.SCOREBOARD_TEXT
+        val matchBoundary = if (kind == TransformKind.CHAT_HEADER_TEXT) chatHeaderBoundary(plain) else plain.length
         val matches = mutableListOf<ResolvedOrderedMatch>()
         var hasAnimatedGradient = false
         var index = 0
 
-        while (index < plain.length) {
+        while (index < matchBoundary) {
             val match = findFirstNameMatch(plain, candidates, index) ?: break
             val customization = match.customization
             val start = match.nameMatch.index
             val end = start + match.nameMatch.matchedName.length
+            if (start >= matchBoundary || end > matchBoundary) {
+                break
+            }
             val isAnimatedGradient = customization.hasAnimatedGradient()
             val badgeText = customization.nameBadge?.text
             matches.add(
@@ -1028,6 +1187,7 @@ object NameStyler {
         plan: OrderedTextTransformPlan,
         includeBadges: Boolean = false,
         animationTime: Double = 0.0,
+        replaceMatchedName: Boolean = false,
     ): Text {
         val rebuilt = Text.empty()
         var index = 0
@@ -1038,6 +1198,7 @@ object NameStyler {
             }
 
             val styledName = when {
+                replaceMatchedName -> cachedGradient(match.customization.displayName(match.content), match.customization, match.baseStyle)
                 match.hasExplicitNameColors -> styledMatchText(match, animationTime)
                 else -> buildOriginalRangeText(source.runs, match.start, match.end)
             }
@@ -1071,17 +1232,14 @@ object NameStyler {
         includeBadges: Boolean = false,
         chatHeaderOnly: Boolean = false,
         terminalBadgesOnly: Boolean = false,
+        replaceMatchedName: Boolean = false,
     ): Text {
         val rebuilt = Text.empty()
         var changed = false
         val recentSegments = ArrayDeque<StyledSegment>()
         val plain = plainText(message)
         val headerBoundary = if (chatHeaderOnly) chatHeaderBoundary(plain) else Int.MAX_VALUE
-        val candidates = if (includeBadges) {
-            PlayerCustomizationRegistry.styledNameCandidates
-        } else {
-            PlayerCustomizationRegistry.gradientNameCandidates
-        }
+        val candidates = candidatesForVisitableTransform(includeBadges, replaceMatchedName)
         var visibleIndex = 0
 
         message.visit({ style, segment ->
@@ -1104,6 +1262,7 @@ object NameStyler {
                     plain,
                     segmentStart,
                     terminalBadgesOnly,
+                    replaceMatchedName,
                 )
             } else if (decoratedSegment.isNotEmpty()) {
                 rebuilt.append(Text.literal(decoratedSegment).setStyle(style))
@@ -1147,11 +1306,7 @@ object NameStyler {
         }
         flush()
 
-        val candidates = if (includeBadges) {
-            PlayerCustomizationRegistry.styledNameCandidates
-        } else {
-            PlayerCustomizationRegistry.gradientNameCandidates
-        }
+        val candidates = candidatesForVisitableTransform(includeBadges, replaceMatchedName = false)
         if (segments.none { containsCandidate(it.second.toString(), candidates) }) {
             return null
         }
@@ -1236,9 +1391,10 @@ object NameStyler {
         includeBadges: Boolean,
         terminalBadgesOnly: Boolean = false,
         allowTruncatedPrefix: Boolean = false,
+        replaceMatchedName: Boolean = false,
     ): Text? {
         val runs = collectRuns(message)
-        return rebuildDecorationsAcrossRuns(runs, includeBadges, terminalBadgesOnly, allowTruncatedPrefix)
+        return rebuildDecorationsAcrossRuns(runs, includeBadges, terminalBadgesOnly, allowTruncatedPrefix, replaceMatchedName)
     }
 
     private fun rebuildDecorationsAcrossSegments(
@@ -1246,9 +1402,10 @@ object NameStyler {
         includeBadges: Boolean,
         terminalBadgesOnly: Boolean = false,
         allowTruncatedPrefix: Boolean = false,
+        replaceMatchedName: Boolean = false,
     ): Text? {
         val runs = collectRuns(message)
-        return rebuildDecorationsAcrossRuns(runs, includeBadges, terminalBadgesOnly, allowTruncatedPrefix)
+        return rebuildDecorationsAcrossRuns(runs, includeBadges, terminalBadgesOnly, allowTruncatedPrefix, replaceMatchedName)
     }
 
     private fun rebuildDecorationsAcrossRuns(
@@ -1256,11 +1413,14 @@ object NameStyler {
         includeBadges: Boolean,
         terminalBadgesOnly: Boolean,
         allowTruncatedPrefix: Boolean,
+        replaceMatchedName: Boolean,
     ): Text? {
         val plain = runsToPlain(runs)
         val candidates = when {
+            allowTruncatedPrefix && replaceMatchedName -> PlayerCustomizationRegistry.scoreboardDisplayNameCandidates
             allowTruncatedPrefix && includeBadges -> PlayerCustomizationRegistry.scoreboardStyledNameCandidates
             allowTruncatedPrefix -> PlayerCustomizationRegistry.scoreboardGradientNameCandidates
+            replaceMatchedName -> PlayerCustomizationRegistry.nameplateDisplayCandidates
             includeBadges -> PlayerCustomizationRegistry.styledNameCandidates
             else -> PlayerCustomizationRegistry.gradientNameCandidates
         }
@@ -1292,10 +1452,11 @@ object NameStyler {
             val matchEnd = matchIndex + matchedName.length
             val resolvedMatchedName = plain.substring(matchIndex, matchEnd)
             val baseStyle = styleAt(runs, matchIndex)
+            val displayName = if (replaceMatchedName) customization.displayName(resolvedMatchedName) else resolvedMatchedName
             val styledName = when {
-                customization.hasExplicitNameColors() -> {
+                replaceMatchedName || customization.hasNameCustomization() -> {
                     changed = true
-                    cachedGradient(resolvedMatchedName, customization, baseStyle)
+                    cachedGradient(displayName, customization, baseStyle)
                 }
                 else -> buildOriginalRangeText(runs, matchIndex, matchEnd)
             }
@@ -1413,6 +1574,16 @@ object NameStyler {
     private fun styleAt(runs: List<StyledRun>, index: Int): Style =
         runs.firstOrNull { index in it.start until it.end }?.style ?: Style.EMPTY
 
+    private fun candidatesForVisitableTransform(
+        includeBadges: Boolean,
+        replaceMatchedName: Boolean,
+    ): List<PlayerCustomizationRegistry.NameCandidate> =
+        when {
+            replaceMatchedName -> PlayerCustomizationRegistry.chatHeaderNameCandidates
+            includeBadges -> PlayerCustomizationRegistry.styledNameCandidates
+            else -> PlayerCustomizationRegistry.gradientNameCandidates
+        }
+
     private fun appendStyledSegment(
         target: MutableText,
         segment: String,
@@ -1422,6 +1593,7 @@ object NameStyler {
         plainText: String = segment,
         segmentStart: Int = 0,
         terminalBadgesOnly: Boolean = false,
+        replaceMatchedName: Boolean = false,
     ) {
         var remaining = segment
         var localOffset = 0
@@ -1449,13 +1621,14 @@ object NameStyler {
             }
 
             val resolvedMatchedName = remaining.substring(matchIndex, matchIndex + matchedName.length)
+            val displayName = if (replaceMatchedName) customization.displayName(resolvedMatchedName) else resolvedMatchedName
             val baseNameStyle = inheritedRankStyle(
                 prefix = remaining.substring(0, matchIndex),
                 customization = customization,
                 defaultStyle = style,
                 recentSegments = recentSegments,
             )
-            val styledName = cachedGradient(resolvedMatchedName, customization, baseNameStyle)
+            val styledName = cachedGradient(displayName, customization, baseNameStyle)
             val hasBadgeAlready = includeBadges && customization.nameBadge != null &&
                 hasPlainBadgeImmediatelyAfter(plainText, segmentStart + localOffset + matchIndex + matchedName.length, customization.nameBadge.text)
             val hasTrailingContent = terminalBadgesOnly &&
@@ -1809,11 +1982,18 @@ object NameStyler {
     private fun candidatesForKind(kind: TransformKind): List<PlayerCustomizationRegistry.NameCandidate> =
         when (kind) {
             TransformKind.GRADIENT_TEXT,
-            TransformKind.GRADIENT_STRING,
-            TransformKind.CHAT_HEADER_TEXT -> PlayerCustomizationRegistry.gradientNameCandidates
+            TransformKind.GRADIENT_STRING -> PlayerCustomizationRegistry.gradientNameCandidates
+
+            TransformKind.NAMEPLATE_DISPLAY_TEXT,
+            TransformKind.CHAT_HEADER_TEXT -> PlayerCustomizationRegistry.chatHeaderNameCandidates
+
+            TransformKind.SCOREBOARD_DISPLAY_TEXT,
+            TransformKind.SCOREBOARD_DISPLAY_STRING -> PlayerCustomizationRegistry.scoreboardDisplayNameCandidates
 
             TransformKind.NAMEPLATE_TEXT,
             TransformKind.DECORATED_STRING -> PlayerCustomizationRegistry.styledNameCandidates
+
+            TransformKind.DECORATED_DISPLAY_STRING -> PlayerCustomizationRegistry.nameplateDisplayCandidates
 
             TransformKind.SCOREBOARD_TEXT,
             TransformKind.SCOREBOARD_STRING -> PlayerCustomizationRegistry.scoreboardStyledNameCandidates
@@ -1850,12 +2030,14 @@ object NameStyler {
 
         val stepsCount = customization.nameAnimationSteps ?: animatedGradientSteps
         val speed = customization.nameAnimationSpeed ?: animatedGradientSpeed
+        val spacing = colors.spacing.coerceIn(1.0f, 10.0f)
         return animatedGradientCache.computeIfAbsent(
-            AnimatedGradientCacheKey(colors.left, colors.right, stepsCount, speed.toRawBits()),
+            AnimatedGradientCacheKey(colors.left, colors.right, stepsCount, speed.toRawBits(), spacing.toRawBits()),
         ) {
             AnimatedGradientStyle(
                 steps = AnimatedGradientStyle.buildLoopGradient(colors.left, colors.right, stepsCount),
                 speed = speed,
+                spacing = spacing,
             )
         }
     }
@@ -1920,15 +2102,16 @@ object NameStyler {
     ): Text {
         val key = ColorizedCacheKey(
             content = content.lowercase(Locale.ROOT),
-            kind = "gradient:${colors.left}:${colors.right}",
+            kind = "gradient:${colors.left}:${colors.right}:${colors.spacing}",
             colors = listOf(colors.left, colors.right),
         )
         val cached = componentCache.computeIfAbsent(key) {
             val text = Text.empty()
             val lastIndex = (content.length - 1).coerceAtLeast(1)
+            val spacing = colors.spacing.coerceIn(1.0f, 10.0f)
             content.forEachIndexed { index, character ->
-                val progress = index.toFloat() / lastIndex.toFloat()
-                val color = interpolateColor(colors.left, colors.right, progress)
+                val progress = gradientFrequencyProgress(index, content.length, spacing)
+                val color = gradientLoopColor(colors.left, colors.right, progress)
                 text.append(Text.literal(character.toString()).setStyle(Style.EMPTY.withColor(color)))
             }
             text
@@ -1950,7 +2133,7 @@ object NameStyler {
         val text = Text.empty()
 
         content.forEachIndexed { index, character ->
-            val color = animatedStyle.getColor(index, time)
+            val color = animatedStyle.getColor(index, content.length, time)
             text.append(Text.literal(character.toString()).setStyle(baseStyle.withColor(color)))
         }
 
@@ -1987,10 +2170,10 @@ object NameStyler {
             val color = if (!letterColors.isNullOrEmpty()) {
                 letterColors.getOrElse(index) { fallbackLetterColor ?: letterColors.last() }
             } else if (gradientColors != null && animatedStyle == null) {
-                val progress = if (content.length <= 1) 0f else index.toFloat() / (content.length - 1).toFloat()
-                interpolateColor(gradientColors.left, gradientColors.right, progress)
+                val frequency = gradientColors.spacing.coerceIn(1.0f, 10.0f)
+                gradientLoopColor(gradientColors.left, gradientColors.right, gradientFrequencyProgress(index, content.length, frequency))
             } else {
-                animatedStyle!!.getColor(index, animationTime)
+                animatedStyle!!.getColor(index, content.length, animationTime)
             }
             val hex = "%06X".format(color)
             output.append(legacyFormat).append('x')
@@ -2080,16 +2263,31 @@ object NameStyler {
         return (r shl 16) or (g shl 8) or b
     }
 
+    private fun gradientFrequencyProgress(index: Int, length: Int, frequency: Float): Float {
+        val normalizedPosition = if (length <= 1) 0f else index.toFloat() / (length - 1).toFloat()
+        return positiveModulo(normalizedPosition * frequency, 1f)
+    }
+
+    private fun gradientLoopColor(left: Int, right: Int, progress: Float): Int {
+        val loopProgress = if (progress <= 0.5f) progress * 2f else (1f - progress) * 2f
+        return interpolateColor(left, right, loopProgress)
+    }
+
+    private fun positiveModulo(value: Float, modulus: Float): Float {
+        val remainder = value % modulus
+        return if (remainder < 0f) remainder + modulus else remainder
+    }
+
     private fun logAnimatedRender(
         matchedName: String,
         customization: PlayerCustomizationRegistry.PlayerCustomization,
     ) {
         val renderPath = when (activeRenderPath.get()) {
-            TransformKind.NAMEPLATE_TEXT -> "nameplate"
-            TransformKind.SCOREBOARD_TEXT, TransformKind.SCOREBOARD_STRING, TransformKind.SIDEBAR_TEXT -> "scoreboard"
+            TransformKind.NAMEPLATE_TEXT, TransformKind.NAMEPLATE_DISPLAY_TEXT -> "nameplate"
+            TransformKind.SCOREBOARD_TEXT, TransformKind.SCOREBOARD_DISPLAY_TEXT, TransformKind.SCOREBOARD_STRING, TransformKind.SCOREBOARD_DISPLAY_STRING, TransformKind.SIDEBAR_TEXT -> "scoreboard"
             TransformKind.GRADIENT_TEXT, TransformKind.GRADIENT_STRING -> "text-renderer"
             TransformKind.CHAT_HEADER_TEXT -> "chat-header"
-            TransformKind.DECORATED_STRING -> "decorated-string"
+            TransformKind.DECORATED_STRING, TransformKind.DECORATED_DISPLAY_STRING -> "decorated-string"
             null -> "unknown"
         }
         val client = MinecraftClient.getInstance()
@@ -2178,11 +2376,11 @@ object NameStyler {
 
     private fun currentRenderPathName(): String =
         when (activeRenderPath.get()) {
-            TransformKind.NAMEPLATE_TEXT -> "nameplate"
-            TransformKind.SCOREBOARD_TEXT, TransformKind.SCOREBOARD_STRING, TransformKind.SIDEBAR_TEXT -> "scoreboard"
+            TransformKind.NAMEPLATE_TEXT, TransformKind.NAMEPLATE_DISPLAY_TEXT -> "nameplate"
+            TransformKind.SCOREBOARD_TEXT, TransformKind.SCOREBOARD_DISPLAY_TEXT, TransformKind.SCOREBOARD_STRING, TransformKind.SCOREBOARD_DISPLAY_STRING, TransformKind.SIDEBAR_TEXT -> "scoreboard"
             TransformKind.GRADIENT_TEXT, TransformKind.GRADIENT_STRING -> "text-renderer"
             TransformKind.CHAT_HEADER_TEXT -> "chat-header"
-            TransformKind.DECORATED_STRING -> "decorated-string"
+            TransformKind.DECORATED_STRING, TransformKind.DECORATED_DISPLAY_STRING -> "decorated-string"
             null -> "unknown"
         }
 

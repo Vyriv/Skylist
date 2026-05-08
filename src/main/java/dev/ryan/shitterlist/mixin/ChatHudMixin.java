@@ -3,12 +3,23 @@ package dev.ryan.throwerlist.mixin;
 import dev.ryan.throwerlist.NameStyler;
 import net.minecraft.client.gui.hud.ChatHud;
 import net.minecraft.text.OrderedText;
+import net.minecraft.text.Text;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 @Mixin(ChatHud.class)
 public abstract class ChatHudMixin {
+    @ModifyVariable(method = "addMessage", at = @At("HEAD"), argsOnly = true)
+    private Text throwerlist$styleChatMessage(Text text) {
+        if (text == null || !NameStyler.INSTANCE.hasChatHeaderStyles()) {
+            return text;
+        }
+
+        return NameStyler.INSTANCE.applyGradientToChatHeader(text);
+    }
+
     @ModifyArg(
         method = "addVisibleMessage",
         at = @At(
@@ -18,10 +29,17 @@ public abstract class ChatHudMixin {
         index = 1
     )
     private OrderedText throwerlist$styleVisibleChatLine(OrderedText text) {
-        if (text == null || !NameStyler.INSTANCE.hasGradientStyles()) {
+        if (text == null || (!NameStyler.INSTANCE.hasChatHeaderStyles() && !NameStyler.INSTANCE.hasGradientStyles())) {
             return text;
         }
 
-        return NameStyler.INSTANCE.applyGradientToOrderedText(text);
+        OrderedText styled = text;
+        if (NameStyler.INSTANCE.hasChatHeaderStyles()) {
+            styled = NameStyler.INSTANCE.applyChatHeaderToOrderedText(styled);
+        }
+        if (NameStyler.INSTANCE.hasGradientStyles()) {
+            styled = NameStyler.INSTANCE.applyGradientToOrderedText(styled);
+        }
+        return styled;
     }
 }
