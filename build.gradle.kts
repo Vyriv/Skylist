@@ -75,7 +75,7 @@ configure(
             kotlin.srcDir(projectDir.resolve("kotlin"))
 
             if (project.name == "mc12110") {
-                kotlin.exclude("dev/ryan/shitterlist/ThrowerListEntryProfileScreen.kt")
+                kotlin.exclude("dev/ryan/playerlist/PlayerListEntryProfileScreen.kt")
             }
         }
     }

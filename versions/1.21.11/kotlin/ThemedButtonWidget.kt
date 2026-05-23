@@ -1,4 +1,4 @@
-package dev.ryan.throwerlist
+package dev.ryan.playerlist
 
 import net.minecraft.client.font.DrawnTextConsumer
 import net.minecraft.client.gui.DrawContext

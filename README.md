@@ -5,7 +5,7 @@ Skylist is a Fabric mod for Hypixel SkyBlock focused on scam prevention and play
 It scans players in real time during trades, party joins, and other interactions, warning you if someone is linked to known scammer databases. The goal is simple. Stop scams before they happen.
 
 Skylist is the core module.
-Additional features like thrower lists, autokick, and advanced party tools are available in Skylist+, which requires this mod.
+Additional features like PlayerList management, auto-remove, and advanced party tools are available in Skylist+, which requires this mod.
 
 ## **Core Features**
 

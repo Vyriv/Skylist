@@ -1,4 +1,4 @@
-package dev.ryan.throwerlist
+package dev.ryan.playerlist
 
 import net.minecraft.client.gui.DrawContext
 import net.minecraft.client.gui.widget.ButtonWidget

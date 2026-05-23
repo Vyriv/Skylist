@@ -1,0 +1,27 @@
+{
+  "required": true,
+  "package": "dev.ryan.playerlist.mixin",
+  "refmap": "playerlist.refmap.json",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ChatHudMixin",
+    "EntityMixin",
+    "LivingEntityRenderStateMixin",
+    "EntityRendererMixin",
+    "InGameHudMixin",
+    "LabelCommandRendererMixin",
+    "LivingEntityRendererMixin",
+    "PlayerEntityRendererMixin",
+    "PlayerListEntryMixin",
+    "PlayerListHudMixin",
+    "ScoreboardEntryMixin",
+    "SkyHanniAdvancedPlayerListMixin",
+    "SkyHanniCustomScoreboardMixin",
+    "TextGuiElementRenderStateMixin",
+    "TextRendererMixin",
+    "TeamMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

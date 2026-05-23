@@ -7,15 +7,15 @@
   "authors": [
     "Vyriv"
   ],
-  "icon": "assets/throwerlist/icon.png",
+  "icon": "assets/playerlist/icon.png",
   "environment": "client",
   "entrypoints": {
     "client": [
-      "dev.ryan.throwerlist.ThrowerListMod"
+      "dev.ryan.playerlist.PlayerListMod"
     ]
   },
   "mixins": [
-    "throwerlist.mixins.json"
+    "playerlist.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.18.1",
