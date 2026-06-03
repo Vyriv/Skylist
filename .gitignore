@@ -11,3 +11,4 @@ Shared resources/
 resources/assets/capes/
 docs/
 .local-secrets/
+.tmp_fabric_msg/
