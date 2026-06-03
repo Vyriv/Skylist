@@ -1,7 +1,6 @@
 package dev.ryan.playerlist.mixin;
 
 import dev.ryan.playerlist.NameStyler;
-import dev.ryan.playerlist.SidebarEntryAccess;
 import net.minecraft.client.gui.hud.InGameHud;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.ScoreboardEntry;
@@ -13,16 +12,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-
 @Mixin(InGameHud.class)
 public abstract class InGameHudMixin {
-    private static final ConcurrentMap<Class<?>, Optional<SidebarEntryAccess>> playerlist$sidebarEntryAccessors = new ConcurrentHashMap<>();
-
     @Inject(
         method = "method_55439(Lnet/minecraft/scoreboard/Scoreboard;Lnet/minecraft/scoreboard/number/NumberFormat;Lnet/minecraft/scoreboard/ScoreboardEntry;)Lnet/minecraft/client/gui/hud/InGameHud$SidebarEntry;",
         at = @At("RETURN"),
@@ -39,27 +30,27 @@ public abstract class InGameHudMixin {
             return;
         }
 
-        try {
-            SidebarEntryAccess access = playerlist$sidebarEntryAccess(sidebarEntry);
-            if (access == null) {
-                return;
-            }
-
-            Text currentName = (Text) access.nameMethod().invoke(sidebarEntry);
-            if (currentName == null) {
-                return;
-            }
-
-            Text styledName = NameStyler.INSTANCE.applyScoreboardDisplayDecorations(currentName);
-            if (styledName == currentName) {
-                return;
-            }
-            Text score = (Text) access.scoreMethod().invoke(sidebarEntry);
-            int scoreWidth = (int) access.scoreWidthMethod().invoke(sidebarEntry);
-
-            cir.setReturnValue(access.constructor().newInstance(styledName, score, scoreWidth));
-        } catch (ReflectiveOperationException ignored) {
+        if (!(sidebarEntry instanceof InGameHudSidebarEntryAccessor access)) {
+            return;
         }
+
+        Text currentName = access.playerlist$getName();
+        if (currentName == null) {
+            return;
+        }
+
+        Text styledName = NameStyler.INSTANCE.applyScoreboardDisplayDecorations(currentName);
+        if (styledName == currentName) {
+            return;
+        }
+
+        cir.setReturnValue(
+            InGameHudSidebarEntryInvoker.playerlist$create(
+                styledName,
+                access.playerlist$getScore(),
+                access.playerlist$getScoreWidth()
+            )
+        );
     }
 
     @ModifyArg(
@@ -77,23 +68,5 @@ public abstract class InGameHudMixin {
 
         Text styled = NameStyler.INSTANCE.applyScoreboardDisplayDecorations(text);
         return styled != text ? styled : text;
-    }
-
-    private static SidebarEntryAccess playerlist$sidebarEntryAccess(Object sidebarEntry) {
-        return playerlist$sidebarEntryAccessors.computeIfAbsent(sidebarEntry.getClass(), InGameHudMixin::playerlist$createSidebarEntryAccess)
-            .orElse(null);
-    }
-
-    private static Optional<SidebarEntryAccess> playerlist$createSidebarEntryAccess(Class<?> sidebarEntryClass) {
-        try {
-            Method nameMethod = sidebarEntryClass.getMethod("name");
-            Method scoreMethod = sidebarEntryClass.getMethod("score");
-            Method scoreWidthMethod = sidebarEntryClass.getMethod("scoreWidth");
-            Constructor<?> constructor = sidebarEntryClass.getDeclaredConstructor(Text.class, Text.class, int.class);
-            constructor.setAccessible(true);
-            return Optional.of(new SidebarEntryAccess(nameMethod, scoreMethod, scoreWidthMethod, constructor));
-        } catch (ReflectiveOperationException ignored) {
-            return Optional.empty();
-        }
     }
 }

@@ -9,16 +9,19 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 
-object WorkerRelay {
-    const val relayBaseUrl = "https://plain-dawn-a5d2.ryaneagers2015.workers.dev"
+object SkylistApiClient {
+    const val apiBaseUrl = PlayerListLinks.skylistApiBaseUrl
 
     private val httpClient: HttpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(5))
         .build()
 
     fun fetchJson(path: String, timeoutSeconds: Long = 8): JsonObject? {
+        // This client only talks to the Skylist relay API for public mod data and
+        // read-only lookups. It does not launch anything locally or access local
+        // account/session files.
         val request = HttpRequest.newBuilder()
-            .uri(URI.create(relayBaseUrl + path))
+            .uri(URI.create(apiBaseUrl + path))
             .timeout(Duration.ofSeconds(timeoutSeconds))
             .header("accept", "application/json,*/*")
             .GET()
@@ -33,8 +36,9 @@ object WorkerRelay {
     }
 
     fun postJson(path: String, body: String, timeoutSeconds: Long = 8): JsonObject? {
+        // POST is used only for the small voluntary Skylist presence payload.
         val request = HttpRequest.newBuilder()
-            .uri(URI.create(relayBaseUrl + path))
+            .uri(URI.create(apiBaseUrl + path))
             .timeout(Duration.ofSeconds(timeoutSeconds))
             .header("accept", "application/json,*/*")
             .header("content-type", "application/json")

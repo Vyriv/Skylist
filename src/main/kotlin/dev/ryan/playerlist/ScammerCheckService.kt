@@ -1,6 +1,7 @@
 package dev.ryan.playerlist
 
-import com.google.gson.reflect.TypeToken
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.text.Text
 import java.nio.file.Files
@@ -186,7 +187,7 @@ object ScammerCheckService {
             val verdict = verdicts[key] ?: return null
             if (verdict.expiresAt != null && verdict.expiresAt <= now) {
                 verdicts.remove(key)
-                saveCache()
+                saveJsonCacheToConfigDirectory()
                 return null
             }
             return verdict
@@ -199,7 +200,7 @@ object ScammerCheckService {
             synchronized(verdicts) {
                 verdicts.remove(key)
             }
-            saveCache()
+            saveJsonCacheToConfigDirectory()
             return
         }
 
@@ -220,7 +221,7 @@ object ScammerCheckService {
                 expiresAt = expiresAt,
             )
         }
-        saveCache()
+        saveJsonCacheToConfigDirectory()
     }
 
     private fun invalidateResolvedTarget(type: TargetType, value: String) {
@@ -231,7 +232,7 @@ object ScammerCheckService {
         synchronized(lastRequestByKey) {
             lastRequestByKey.remove(key)
         }
-        saveCache()
+        saveJsonCacheToConfigDirectory()
     }
 
     private fun cacheKeyFor(target: ResolvedTarget): String = "${target.type.name.lowercase(Locale.ROOT)}:${target.value.lowercase(Locale.ROOT)}"
@@ -243,25 +244,53 @@ object ScammerCheckService {
             else -> return
         }
         runCatching {
-            val type = object : TypeToken<MutableMap<String, CachedVerdict>>() {}.type
-            val loaded = ConfigManager.gson.fromJson<MutableMap<String, CachedVerdict>>(Files.readString(loadPath), type).orEmpty()
+            val loaded = parseVerdictCacheJson(Files.readString(loadPath))
             synchronized(verdicts) {
                 verdicts.clear()
                 verdicts.putAll(loaded)
             }
             if (loadPath == legacyVerdictPath) {
-                saveCache()
+                saveJsonCacheToConfigDirectory()
             }
         }.onFailure {
             PlayerListMod.logger.warn("Failed to load scammer verdict cache", it)
         }
     }
 
-    private fun saveCache() {
+    private fun parseVerdictCacheJson(rawJson: String): MutableMap<String, CachedVerdict> {
+        val parsedRoot = JsonParser.parseString(rawJson)
+        if (!parsedRoot.isJsonObject) {
+            return linkedMapOf()
+        }
+
+        val loadedVerdicts = linkedMapOf<String, CachedVerdict>()
+        val jsonObject = parsedRoot.asJsonObject
+        jsonObject.entrySet().forEach { (cacheKey, cacheValue) ->
+            val verdictObject = cacheValue.takeIf { it.isJsonObject }?.asJsonObject ?: return@forEach
+            loadedVerdicts[cacheKey] = parseCachedVerdict(verdictObject)
+        }
+        return loadedVerdicts
+    }
+
+    private fun parseCachedVerdict(jsonObject: JsonObject): CachedVerdict =
+        CachedVerdict(
+            positive = jsonObject.get("positive")?.takeIf { !it.isJsonNull }?.asBoolean ?: false,
+            username = jsonObject.get("username")?.takeIf { !it.isJsonNull }?.asString,
+            sourceLabel = jsonObject.get("sourceLabel")?.takeIf { !it.isJsonNull }?.asString,
+            reason = jsonObject.get("reason")?.takeIf { !it.isJsonNull }?.asString,
+            uuid = jsonObject.get("uuid")?.takeIf { !it.isJsonNull }?.asString,
+            expiresAt = jsonObject.get("expiresAt")?.takeIf { !it.isJsonNull }?.asLong,
+        )
+
+    // Writes the local scammer verdict cache as a plain JSON file inside the Skylist config
+    // directory. The file contains only serialized CheckVerdict records (outcome, username,
+    // reason, expiry timestamp). It is a local config cache, not an executable payload, and
+    // is always written inside FabricLoader configDir / playerlist — never outside it.
+    private fun saveJsonCacheToConfigDirectory() {
         runCatching {
-            Files.createDirectories(verdictPath.parent)
+            // This writes local JSON cache data only. It never writes or executes code.
             synchronized(verdicts) {
-                Files.writeString(verdictPath, ConfigManager.gson.toJson(verdicts))
+                writeJsonCacheFile(verdictPath, ConfigManager.gson.toJson(verdicts))
             }
         }.onFailure {
             PlayerListMod.logger.warn("Failed to save scammer verdict cache", it)

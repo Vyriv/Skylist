@@ -12,8 +12,5 @@ plugins {
 
 rootProject.name = "skylist"
 
-include(":versions:mc12110")
-project(":versions:mc12110").projectDir = file("versions/1.21.10")
-
 include(":versions:mc12111")
 project(":versions:mc12111").projectDir = file("versions/1.21.11")

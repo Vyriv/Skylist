@@ -3,6 +3,7 @@ package dev.ryan.playerlist
 import kotlin.math.floor
 
 class AnimatedGradientStyle(
+    // Precomputed RGB steps for a looping two-color gradient animation.
     val steps: IntArray,
     val speed: Float,
     val spacing: Float,
@@ -31,23 +32,23 @@ class AnimatedGradientStyle(
     }
 
     companion object {
-        fun buildLoopGradient(color1: Int, color2: Int, stepsCount: Int): IntArray {
+        fun buildLoopGradient(primaryColor: Int, secondaryColor: Int, stepsCount: Int): IntArray {
             val count = stepsCount.coerceAtLeast(2)
             val half = count / 2
             val remaining = count - half
-            val steps = IntArray(count)
+            val gradientSteps = IntArray(count)
 
             for (index in 0 until half) {
                 val progress = if (half <= 1) 1f else index.toFloat() / (half - 1).toFloat()
-                steps[index] = interpolate(color1, color2, progress)
+                gradientSteps[index] = interpolate(primaryColor, secondaryColor, progress)
             }
 
             for (index in 0 until remaining) {
                 val progress = if (remaining <= 1) 1f else index.toFloat() / (remaining - 1).toFloat()
-                steps[half + index] = interpolate(color2, color1, progress)
+                gradientSteps[half + index] = interpolate(secondaryColor, primaryColor, progress)
             }
 
-            return steps
+            return gradientSteps
         }
 
         private fun positiveModulo(value: Double, modulus: Double): Double {
@@ -57,19 +58,19 @@ class AnimatedGradientStyle(
 
         private fun interpolate(start: Int, end: Int, progress: Float): Int {
             val clamped = progress.coerceIn(0f, 1f)
-            val startR = (start shr 16) and 0xFF
-            val startG = (start shr 8) and 0xFF
-            val startB = start and 0xFF
+            val startRed = (start shr 16) and 0xFF
+            val startGreen = (start shr 8) and 0xFF
+            val startBlue = start and 0xFF
 
-            val endR = (end shr 16) and 0xFF
-            val endG = (end shr 8) and 0xFF
-            val endB = end and 0xFF
+            val endRed = (end shr 16) and 0xFF
+            val endGreen = (end shr 8) and 0xFF
+            val endBlue = end and 0xFF
 
-            val r = (startR + ((endR - startR) * clamped)).toInt().coerceIn(0, 255)
-            val g = (startG + ((endG - startG) * clamped)).toInt().coerceIn(0, 255)
-            val b = (startB + ((endB - startB) * clamped)).toInt().coerceIn(0, 255)
+            val redChannel = (startRed + ((endRed - startRed) * clamped)).toInt().coerceIn(0, 255)
+            val greenChannel = (startGreen + ((endGreen - startGreen) * clamped)).toInt().coerceIn(0, 255)
+            val blueChannel = (startBlue + ((endBlue - startBlue) * clamped)).toInt().coerceIn(0, 255)
 
-            return (r shl 16) or (g shl 8) or b
+            return (redChannel shl 16) or (greenChannel shl 8) or blueChannel
         }
     }
 }

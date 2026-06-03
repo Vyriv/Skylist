@@ -26,7 +26,10 @@ object CapeTextureManager {
     private const val REMOTE_CAPE_MAX_BYTES = 4 * 1024 * 1024
     private const val REMOTE_RETRY_DELAY_MILLIS = 30_000L
 
-    private val loadedCapes = ConcurrentHashMap<String, CachedCape>()
+    // This cache stores decoded cape textures by bundled asset path or remote HTTPS URL.
+    // It only handles image bytes for cosmetic capes. It never writes files to disk and
+    // it never downloads or launches jars, executables, or native code.
+    private val capeCacheBySource = ConcurrentHashMap<String, CachedCape>()
     private val httpClient: HttpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(6))
         .build()
@@ -37,7 +40,7 @@ object CapeTextureManager {
                 return@register
             }
 
-            loadedCapes.values.forEach { it.tick() }
+            capeCacheBySource.values.forEach { it.tick() }
         }
     }
 
@@ -52,55 +55,55 @@ object CapeTextureManager {
     }
 
     fun invalidateRemoteCapes() {
-        loadedCapes.entries.removeIf { it.key.startsWith("url:") }
+        capeCacheBySource.entries.removeIf { it.key.startsWith("url:") }
     }
 
     private fun getBundledCapeTexture(resourcePath: String): AssetInfo.TextureAssetInfo? {
         val cacheKey = "asset:$resourcePath"
-        val cached = loadedCapes.computeIfAbsent(cacheKey) {
+        val cachedCape = capeCacheBySource.computeIfAbsent(cacheKey) {
             CachedCape(isRemote = false, loadedCape = loadBundledCape(resourcePath))
         }
-        return cached.loadedCape?.textureAsset
+        return cachedCape.loadedCape?.textureAsset
     }
 
     private fun getRemoteCapeTexture(capeUrl: String): AssetInfo.TextureAssetInfo? {
         val cacheKey = "url:$capeUrl"
-        val cached = loadedCapes.computeIfAbsent(cacheKey) { CachedCape(isRemote = true) }
-        if (cached.loadedCape != null) {
-            return cached.loadedCape?.textureAsset
+        val cachedCape = capeCacheBySource.computeIfAbsent(cacheKey) { CachedCape(isRemote = true) }
+        if (cachedCape.loadedCape != null) {
+            return cachedCape.loadedCape?.textureAsset
         }
-        if (cached.shouldRetry()) {
-            requestRemoteCape(cacheKey, capeUrl, cached)
+        if (cachedCape.shouldRetry()) {
+            requestRemoteCape(cacheKey, capeUrl, cachedCape)
         }
         return null
     }
 
-    private fun requestRemoteCape(cacheKey: String, capeUrl: String, cache: CachedCape) {
-        cache.loading = true
+    private fun requestRemoteCape(cacheKey: String, capeUrl: String, cachedCape: CachedCape) {
+        cachedCape.loading = true
         CompletableFuture.supplyAsync {
             downloadRemoteCape(capeUrl)
         }.whenComplete { bytes, throwable ->
             if (throwable != null || bytes == null) {
-                cache.loading = false
-                cache.lastFailureAt = System.currentTimeMillis()
+                cachedCape.loading = false
+                cachedCape.lastFailureAt = System.currentTimeMillis()
                 PlayerListMod.logger.warn("Failed to fetch remote cape '{}'", capeUrl, throwable)
                 return@whenComplete
             }
 
             PlayerListMod.client.execute {
-                val loadedCape = runCatching {
+                val decodedCape = runCatching {
                     loadCapeBytes(textureIdForRemote(capeUrl), bytes, capeUrl)
                 }.getOrElse { error ->
-                    cache.loading = false
-                    cache.lastFailureAt = System.currentTimeMillis()
+                    cachedCape.loading = false
+                    cachedCape.lastFailureAt = System.currentTimeMillis()
                     PlayerListMod.logger.warn("Failed to decode remote cape '{}'", capeUrl, error)
                     return@execute
                 }
 
-                cache.loadedCape = loadedCape
-                cache.loading = false
-                cache.lastFailureAt = 0L
-                loadedCapes[cacheKey] = cache
+                cachedCape.loadedCape = decodedCape
+                cachedCape.loading = false
+                cachedCape.lastFailureAt = 0L
+                capeCacheBySource[cacheKey] = cachedCape
                 PlayerListMod.logger.info("Loaded remote cape '{}'", capeUrl)
             }
         }
@@ -203,6 +206,8 @@ object CapeTextureManager {
             throw IOException("Unexpected response ${response.statusCode()} from $capeUrl")
         }
 
+        // Remote cape loading accepts only image content. The downloaded bytes stay in
+        // memory, are decoded as PNG/GIF, and are registered as Minecraft textures.
         val contentType = response.headers().firstValue("content-type").orElse("").lowercase(Locale.ROOT)
         val looksLikeImage = contentType.startsWith("image/png") || contentType.startsWith("image/gif")
         val hasSupportedSuffix = capeUrl.lowercase(Locale.ROOT).endsWith(".png") || capeUrl.lowercase(Locale.ROOT).endsWith(".gif")

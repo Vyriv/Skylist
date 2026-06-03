@@ -7,6 +7,10 @@ It scans players in real time during trades, party joins, and other interactions
 Skylist is the core module.
 Additional features like PlayerList management, auto-remove, and advanced party tools are available in Skylist+, which requires this mod.
 
+## **Supported Version**
+
+* Minecraft `1.21.11`
+
 ## **Core Features**
 
 * Real-time scammer detection using external databases

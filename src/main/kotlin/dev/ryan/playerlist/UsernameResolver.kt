@@ -73,7 +73,9 @@ object UsernameResolver {
         return CompletableFuture.supplyAsync({
             val normalizedUuid = uuid.lowercase().replace("-", "")
             val root = try {
-                WorkerRelay.fetchJson("/hypixel/player/$normalizedUuid", timeoutSeconds = 8)
+                // This reads the public Discord field exposed by Hypixel player data via the
+                // Skylist relay. It does not inspect the local Discord client or any files.
+                SkylistApiClient.fetchJson("/hypixel/player/$normalizedUuid", timeoutSeconds = 8)
             } catch (throwable: Throwable) {
                 throw IllegalStateException("Hypixel player relay lookup failed", throwable)
             }
@@ -155,7 +157,7 @@ object UsernameResolver {
     private fun resolveUuidViaRelay(uuid: String): String? {
         val normalizedUuid = uuid.lowercase()
         val request = HttpRequest.newBuilder()
-            .uri(URI.create("${WorkerRelay.relayBaseUrl}/minecraft/lookup/$normalizedUuid"))
+            .uri(URI.create("${SkylistApiClient.apiBaseUrl}/minecraft/lookup/$normalizedUuid"))
             .timeout(Duration.ofSeconds(5))
             .header("accept", "*/*")
             .GET()

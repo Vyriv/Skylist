@@ -6,7 +6,7 @@ import java.time.ZonedDateTime
 import java.util.Locale
 
 object EntryExpiry {
-    private val tokenPattern = Regex(
+    private val durationTokenPattern = Regex(
         """(\d+)\s*(years?|year|y|months?|month|mt|days?|day|d|hours?|hour|hrs?|hr|h|minutes?|minute|mins?|min|m|seconds?|second|secs?|sec|s)""",
         RegexOption.IGNORE_CASE,
     )
@@ -77,7 +77,7 @@ object EntryExpiry {
                 break
             }
 
-            val match = tokenPattern.find(input, index)
+            val match = durationTokenPattern.find(input, index)
             if (match == null || match.range.first != index) {
                 return null
             }

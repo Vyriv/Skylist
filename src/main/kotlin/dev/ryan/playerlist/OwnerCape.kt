@@ -2,7 +2,6 @@ package dev.ryan.playerlist
 
 import com.mojang.authlib.GameProfile
 import net.minecraft.entity.player.SkinTextures
-import java.util.LinkedHashMap
 import java.util.Locale
 import java.util.Optional
 
@@ -17,24 +16,7 @@ object OwnerCape {
         val capeUrl: String?,
     )
 
-    private class LruCache<K, V>(private val maxEntries: Int) : LinkedHashMap<K, V>(maxEntries, 0.75f, true) {
-        @Synchronized
-        fun getCached(key: K): V? = super.get(key)
-
-        @Synchronized
-        fun putCached(key: K, value: V) {
-            super.put(key, value)
-        }
-
-        @Synchronized
-        fun clearCache() {
-            super.clear()
-        }
-
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>?): Boolean = size > maxEntries
-    }
-
-    private val capeCache = LruCache<CapeCacheKey, SkinTextures>(cacheLimit)
+    private val capeCache = NameStylerLruCache<CapeCacheKey, SkinTextures>(cacheLimit)
 
     @Volatile
     private var observedRegistryVersion = Long.MIN_VALUE

@@ -1,7 +1,6 @@
 package dev.ryan.playerlist
 
 import net.fabricmc.loader.api.FabricLoader
-import java.nio.file.Path
 
 object RuntimeVersion {
     private const val modId = "skylist"
@@ -28,10 +27,4 @@ object RuntimeVersion {
         }
     }
 
-    fun currentJarPath(): Path? =
-        runCatching {
-            Path.of(
-                RuntimeVersion::class.java.protectionDomain.codeSource.location.toURI(),
-            ).takeIf { path -> path.fileName?.toString()?.endsWith(".jar", ignoreCase = true) == true }
-        }.getOrNull()
 }

@@ -26,7 +26,6 @@ fun loadTargetProperties(projectDir: File): Properties {
 
 configure(
     listOf(
-        project(":versions:mc12110"),
         project(":versions:mc12111"),
     ),
 ) {
@@ -73,10 +72,6 @@ configure(
         sourceSets.named("main") {
             kotlin.srcDir(sharedMainDir.resolve("kotlin"))
             kotlin.srcDir(projectDir.resolve("kotlin"))
-
-            if (project.name == "mc12110") {
-                kotlin.exclude("dev/ryan/playerlist/PlayerListEntryProfileScreen.kt")
-            }
         }
     }
 

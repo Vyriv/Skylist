@@ -16,9 +16,10 @@ object ContentManager {
     private const val playerHeightBlocks = 1.8f
     private const val playerDepthBlocks = 0.6f
 
+    private const val peopleResourcePath = "playerlist/content/people.json"
     private const val reasonsResourcePath = "playerlist/content/reasons.json"
     private const val uiTextResourcePath = "playerlist/content/ui_text.json"
-    private const val remotePeopleUrl = "https://plain-dawn-a5d2.ryaneagers2015.workers.dev/cosmetics/people"
+    private const val remotePeopleUrl = PlayerListLinks.githubCosmeticsDataUrl
     private val fallbackTrollButtonMessages = listOf("Don't Press me")
     private val httpClient: HttpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(5))
@@ -30,8 +31,6 @@ object ContentManager {
             role = "Lead developer",
             leftColor = 0x9278C5,
             rightColor = 0xF3E6FD,
-            linkUrl = "https://discord.com/users/714135340268519466",
-            linkHover = "Open Vyriv's discord",
         ),
     )
 
@@ -51,7 +50,12 @@ object ContentManager {
 
     @Synchronized
     fun load() {
-        peopleContent = PeopleContent()
+        peopleContent = loadResource(
+            resourcePath = peopleResourcePath,
+            clazz = PeopleContent::class.java,
+            label = "bundled player customization data",
+            fallback = PeopleContent(),
+        ).normalized()
         remotePeopleContent = PeopleContent()
         reasonContent = loadResource(
             resourcePath = reasonsResourcePath,
@@ -82,7 +86,7 @@ object ContentManager {
 
                     remotePeopleContent = remote.normalized()
                     PlayerListMod.logger.info(
-                        "Loaded {} remote cosmetic player entries from {} API refresh",
+                        "Loaded {} remote cosmetic player entries from {} refresh",
                         remotePeopleContent.players.size + remotePeopleContent.awesomePeople.size,
                         logPrefix,
                     )
@@ -92,7 +96,7 @@ object ContentManager {
                     }
                 }
                 .onFailure {
-                    PlayerListMod.logger.warn("Failed to fetch {} cosmetic player API", logPrefix, it)
+                    PlayerListMod.logger.warn("Failed to fetch {} cosmetic player data", logPrefix, it)
                 }
         }.thenApply { Unit }
 
@@ -279,7 +283,12 @@ object ContentManager {
         val orderedKeys = linkedSetOf<String>()
         val mergedEntries = linkedMapOf<String, PlayerCustomizationFile>()
 
-        listOf(remotePeopleContent.players, remotePeopleContent.awesomePeople).forEach { section ->
+        listOf(
+            peopleContent.players,
+            peopleContent.awesomePeople,
+            remotePeopleContent.players,
+            remotePeopleContent.awesomePeople,
+        ).forEach { section ->
             section.forEach { entry ->
                 val key = existingCustomizationKey(entry, mergedEntries) ?: entry.identityKey() ?: return@forEach
                 orderedKeys.add(key)
@@ -446,8 +455,6 @@ object ContentManager {
         val role: String,
         val leftColor: Int,
         val rightColor: Int,
-        val linkUrl: String?,
-        val linkHover: String?,
     )
 
     data class LoadedCreditEntry(
@@ -526,6 +533,9 @@ object ContentManager {
             .GET()
             .build()
 
+        // This request downloads only the public cosmetics JSON payload used to style
+        // names, capes, and credits. It does not read local files and it does not send
+        // any player account, session, Discord, or token data.
         val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
         if (response.statusCode() != 200) {
             error("Unexpected response ${response.statusCode()} from $requestUri")

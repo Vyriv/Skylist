@@ -2,7 +2,6 @@ package dev.ryan.playerlist
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
-import com.google.gson.reflect.TypeToken
 import net.fabricmc.loader.api.FabricLoader
 import java.nio.file.Files
 import java.nio.file.Path
@@ -11,8 +10,8 @@ import kotlin.text.buildString
 
 object ConfigManager {
     const val scammerStorageDisabledValue = "none"
-    private const val defaultLocalAutokickTemplate = "[SL] <IGN> is on Vyriv's Skylist for <REASON>"
-    private const val defaultRemoteAutokickTemplate = "[SL] <IGN> is on Vyriv's Skylist for <REASON>. Appeal at gg/4ZSFKWSY65"
+    internal const val defaultLocalAutokickTemplate = "[SL] <IGN> is on Vyriv's Skylist for <REASON>"
+    internal const val defaultRemoteAutokickTemplate = "[SL] <IGN> is on Vyriv's Skylist for <REASON>. Appeal at gg/4ZSFKWSY65"
     val gson: Gson = GsonBuilder().setPrettyPrinting().create()
     private val configDirectoryPath: Path = FabricLoader.getInstance().configDir.resolve("playerlist")
     private val settingsPath: Path = configDirectoryPath.resolve("config.json")
@@ -68,9 +67,9 @@ object ConfigManager {
             return settings.copy()
         }
 
-        settings = readJson(listOf(settingsPath, previousSettingsPath, legacySettingsPath), object : TypeToken<SettingsConfig>() {}.type, SettingsConfig(), "settings")
-        players = readJson(listOf(playersPath, previousPlayersPath, legacyPlayersPath), object : TypeToken<MutableList<PlayerEntry>>() {}.type, mutableListOf(), "local PlayerList")
-        importState = readJson(listOf(importPath, previousImportPath, legacyImportPath), object : TypeToken<ImportConfig>() {}.type, ImportConfig(), "remote PlayerList state")
+        settings = readSettingsConfig(listOf(settingsPath, previousSettingsPath, legacySettingsPath))
+        players = readPlayerEntries(listOf(playersPath, previousPlayersPath, legacyPlayersPath))
+        importState = readImportConfig(listOf(importPath, previousImportPath, legacyImportPath))
         normalizeSettings()
         normalizePlayers()
         normalizeImportState()
@@ -110,7 +109,12 @@ object ConfigManager {
     fun isAutokickEnabled(): Boolean = (settings.localAutokickEnabled ?: false) || (settings.remoteAutokickEnabled ?: false)
 
     @Synchronized
-    fun isAutokickEnabled(isRemote: Boolean): Boolean = if (isRemote) settings.remoteAutokickEnabled ?: false else settings.localAutokickEnabled ?: false
+    fun isAutokickEnabled(isRemote: Boolean): Boolean =
+        if (isRemote) {
+            settings.remoteAutokickEnabled ?: false
+        } else {
+            settings.localAutokickEnabled ?: false
+        }
 
     @Synchronized
     fun isLobbyNotificationsEnabled(): Boolean = settings.lobbyNotifications
@@ -146,7 +150,11 @@ object ConfigManager {
 
     @Synchronized
     fun getAutokickMessageTemplate(isRemote: Boolean): String =
-        if (isRemote) settings.remoteAutokickTemplate ?: defaultRemoteAutokickTemplate else settings.localAutokickTemplate ?: defaultLocalAutokickTemplate
+        if (isRemote) {
+            settings.remoteAutokickTemplate ?: defaultRemoteAutokickTemplate
+        } else {
+            settings.localAutokickTemplate ?: defaultLocalAutokickTemplate
+        }
 
     @Synchronized
     fun setAutokickMessageTemplate(template: String, isRemote: Boolean): String {
@@ -762,36 +770,68 @@ object ConfigManager {
     private fun normalizeSettings() {
         settings.localAutokickEnabled = settings.localAutokickEnabled ?: settings.enabled ?: true
         settings.remoteAutokickEnabled = settings.remoteAutokickEnabled ?: false
-        settings.localAutokickTemplate = settings.localAutokickTemplate
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?: defaultLocalAutokickTemplate
-        settings.remoteAutokickTemplate = settings.remoteAutokickTemplate
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?: defaultRemoteAutokickTemplate
-        settings.uiTheme = settings.uiTheme?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: "ocean"
+        settings.localAutokickTemplate = normalizeOptionalText(
+            settings.localAutokickTemplate,
+            defaultLocalAutokickTemplate,
+        )
+        settings.remoteAutokickTemplate = normalizeOptionalText(
+            settings.remoteAutokickTemplate,
+            defaultRemoteAutokickTemplate,
+        )
+        settings.uiTheme = normalizeOptionalLowercaseText(settings.uiTheme, "ocean")
         settings.remoteScammerChecksEnabled = settings.remoteScammerChecksEnabled ?: true
         settings.autoCheckPartyMembersEnabled = settings.autoCheckPartyMembersEnabled ?: true
         settings.autoCheckOnJoinEnabled = settings.autoCheckOnJoinEnabled ?: true
         settings.miscIgnoreListEnabled = settings.miscIgnoreListEnabled
-        settings.miscIgnoredUsernames = settings.miscIgnoredUsernames
-            .mapNotNull { it.trim().takeIf { trimmed -> trimmed.matches(Regex("^[A-Za-z0-9_]{1,16}$")) } }
-            .distinctBy { it.lowercase() }
-            .toMutableList()
+        settings.miscIgnoredUsernames = normalizeIgnoredUsernames(settings.miscIgnoredUsernames)
         settings.scammerStorageDuration = settings.scammerStorageDuration
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
-            ?.let { if (it.equals(scammerStorageDisabledValue, ignoreCase = true)) scammerStorageDisabledValue else it }
+            ?.let { normalizedDuration ->
+                if (normalizedDuration.equals(scammerStorageDisabledValue, ignoreCase = true)) {
+                    scammerStorageDisabledValue
+                } else {
+                    normalizedDuration
+                }
+            }
         settings.scammerAutokickEnabled = settings.scammerAutokickEnabled ?: false
-        settings.scammerLogOnlyThreshold = settings.scammerLogOnlyThreshold?.takeIf { it > 0.0 } ?: ScammerListManager.DEFAULT_LOG_ONLY_THRESHOLD
-        settings.scammerAutokickThreshold = parseScammerSeverity(settings.scammerAutokickThreshold)?.name ?: ScammerListManager.ScammerSeverity.CRITICAL.name
+        settings.scammerLogOnlyThreshold =
+            settings.scammerLogOnlyThreshold?.takeIf { thresholdValue -> thresholdValue > 0.0 }
+                ?: ScammerListManager.DEFAULT_LOG_ONLY_THRESHOLD
+        settings.scammerAutokickThreshold =
+            parseScammerSeverity(settings.scammerAutokickThreshold)?.name
+                ?: ScammerListManager.ScammerSeverity.CRITICAL.name
         settings.announceScammerHitsEnabled = settings.announceScammerHitsEnabled ?: false
-        settings.scammerWarningThreshold = parseScammerSeverity(settings.scammerWarningThreshold)?.name ?: ScammerListManager.ScammerSeverity.MEDIUM.name
+        settings.scammerWarningThreshold =
+            parseScammerSeverity(settings.scammerWarningThreshold)?.name
+                ?: ScammerListManager.ScammerSeverity.MEDIUM.name
         settings.scammerOnlyNotifyEnabled = settings.scammerOnlyNotifyEnabled ?: true
         settings.tradeScammerPopupEnabled = settings.tradeScammerPopupEnabled ?: true
         settings.dungeonAutokick = settings.dungeonAutokick.normalized()
         settings.enabled = isAutokickEnabled()
+    }
+
+    private fun normalizeOptionalText(value: String?, defaultValue: String): String =
+        value?.trim()?.takeIf { trimmedValue -> trimmedValue.isNotEmpty() } ?: defaultValue
+
+    private fun normalizeOptionalLowercaseText(value: String?, defaultValue: String): String =
+        value?.trim()
+            ?.lowercase(Locale.ROOT)
+            ?.takeIf { trimmedValue -> trimmedValue.isNotEmpty() }
+            ?: defaultValue
+
+    private fun normalizeIgnoredUsernames(rawUsernames: List<String>): MutableList<String> {
+        val normalizedUsernames = mutableListOf<String>()
+        rawUsernames.forEach { rawUsername ->
+            val trimmedUsername = rawUsername.trim()
+            if (!trimmedUsername.matches(Regex("^[A-Za-z0-9_]{1,16}$"))) {
+                return@forEach
+            }
+            if (normalizedUsernames.none { existingUsername -> existingUsername.equals(trimmedUsername, ignoreCase = true) }) {
+                normalizedUsernames += trimmedUsername
+            }
+        }
+        return normalizedUsernames
     }
 
     private fun parseScammerSeverity(value: String?): ScammerListManager.ScammerSeverity? =
@@ -910,114 +950,55 @@ object ConfigManager {
             ?.lowercase(Locale.ROOT)
 
     private fun writeState() {
-        Files.createDirectories(configDirectoryPath)
-        Files.writeString(settingsPath, gson.toJson(settings))
-        Files.writeString(playersPath, insertConfigComments(gson.toJson(players)))
-        Files.writeString(importPath, gson.toJson(importState))
+        // This writes local JSON configuration data only. It never writes or executes code.
+        writeJsonCacheFile(settingsPath, gson.toJson(settings))
+        writeJsonCacheFile(playersPath, insertConfigComments(gson.toJson(players)))
+        writeJsonCacheFile(importPath, gson.toJson(importState))
         deleteLegacyHistoryFile()
     }
 
-    private fun <T> readJson(paths: List<Path>, type: java.lang.reflect.Type, defaultValue: T, label: String): T {
-        val path = paths.firstOrNull(Files::exists) ?: return defaultValue
-        if (Files.notExists(path)) {
-            return defaultValue
-        }
+    private fun readSettingsConfig(paths: List<Path>): SettingsConfig =
+        readJsonValue(paths, SettingsConfig::class.java, SettingsConfig(), "settings")
 
+    private fun readImportConfig(paths: List<Path>): ImportConfig =
+        readJsonValue(paths, ImportConfig::class.java, ImportConfig(), "remote PlayerList state")
+
+    private fun readPlayerEntries(paths: List<Path>): MutableList<PlayerEntry> {
+        val cleanedConfig = readCleanConfigText(paths, "local PlayerList") ?: return mutableListOf()
         return runCatching {
-            val rawConfig = Files.readString(path)
-            val cleanedConfig = rawConfig.lineSequence()
-                .filterNot { it.trimStart().startsWith("#") }
-                .joinToString(System.lineSeparator())
-            gson.fromJson<T>(cleanedConfig, type) ?: defaultValue
+            val playerEntries = gson.fromJson(cleanedConfig, Array<PlayerEntry>::class.java) ?: emptyArray()
+            playerEntries.toMutableList()
+        }.getOrElse {
+            PlayerListMod.logger.error("Failed to load local PlayerList, using defaults", it)
+            mutableListOf()
+        }
+    }
+
+    private fun <T> readJsonValue(paths: List<Path>, valueClass: Class<T>, defaultValue: T, label: String): T {
+        val cleanedConfig = readCleanConfigText(paths, label) ?: return defaultValue
+        return runCatching {
+            gson.fromJson(cleanedConfig, valueClass) ?: defaultValue
         }.getOrElse {
             PlayerListMod.logger.error("Failed to load $label, using defaults", it)
             defaultValue
         }
     }
 
-    data class SettingsConfig(
-        var enabled: Boolean? = true,
-        var localAutokickEnabled: Boolean? = true,
-        var remoteAutokickEnabled: Boolean? = false,
-        var localAutokickTemplate: String? = defaultLocalAutokickTemplate,
-        var remoteAutokickTemplate: String? = defaultRemoteAutokickTemplate,
-        var lobbyNotifications: Boolean = true,
-        var assumePartyLeader: Boolean = false,
-        var customCapesDisabled: Boolean = false,
-        var customScalerDisabled: Boolean = false,
-        var developerIdentifierEnabled: Boolean = false,
-        var hypixelApiKey: String? = null,
-        var uiTheme: String? = "ocean",
-        var remoteScammerChecksEnabled: Boolean? = true,
-        var autoCheckPartyMembersEnabled: Boolean? = true,
-        var autoCheckOnJoinEnabled: Boolean? = true,
-        var miscIgnoreListEnabled: Boolean = false,
-        var miscIgnoredUsernames: MutableList<String> = mutableListOf(),
-        var scammerStorageDuration: String? = null,
-        var scammerAutokickEnabled: Boolean? = false,
-        var scammerLogOnlyThreshold: Double? = ScammerListManager.DEFAULT_LOG_ONLY_THRESHOLD,
-        var scammerAutokickThreshold: String? = ScammerListManager.ScammerSeverity.CRITICAL.name,
-        var announceScammerHitsEnabled: Boolean? = false,
-        var scammerWarningThreshold: String? = ScammerListManager.ScammerSeverity.MEDIUM.name,
-        var scammerOnlyNotifyEnabled: Boolean? = true,
-        var tradeScammerPopupEnabled: Boolean? = true,
-        var swingSpeedEnabled: Boolean = false,
-        var swingSpeedValue: Float = 1.0f,
-        var dungeonAutokick: DungeonAutokickSettings = DungeonAutokickSettings(),
-    )
-
-    data class DungeonAutokickSettings(
-        var enabled: Boolean = false,
-        var pbThresholds: MutableMap<String, String?> = linkedMapOf(),
-        var noPrinceAttributeShard: Boolean = false,
-        var noSpiritPet: Boolean = false,
-        var thornsOnEquippedArmourSet: Boolean = false,
-        var checkForRouters: Boolean = false,
-        var routerAction: String = "WARN",
-    ) {
-        fun normalized(): DungeonAutokickSettings {
-            pbThresholds = pbThresholds.entries
-                .mapNotNull { (key, value) ->
-                    val normalizedKey = key.trim().uppercase().takeIf { it.matches(Regex("""F7|M[1-7]""")) } ?: return@mapNotNull null
-                    normalizedKey to value?.trim()?.takeIf { it.isNotEmpty() }
-                }
-                .associateTo(linkedMapOf()) { it }
-            routerAction = routerAction.trim().uppercase(Locale.ROOT)
-                .takeIf { it == "NOTHING" || it == "WARN" || it == "KICK" }
-                ?: "WARN"
-            return this
+    private fun readCleanConfigText(paths: List<Path>, label: String): String? {
+        val path = paths.firstOrNull(Files::exists) ?: return null
+        if (Files.notExists(path)) {
+            return null
         }
 
-        fun hasConfiguredChecks(): Boolean =
-            pbThresholds.values.any { !it.isNullOrBlank() } || noPrinceAttributeShard || noSpiritPet || thornsOnEquippedArmourSet
+        return runCatching {
+            val rawConfig = Files.readString(path)
+            rawConfig.lineSequence()
+                .filterNot { it.trimStart().startsWith("#") }
+                .joinToString(System.lineSeparator())
+        }.getOrElse {
+            PlayerListMod.logger.error("Failed to load $label, using defaults", it)
+            null
+        }
     }
 
-    data class ImportConfig(
-        var hiddenRemoteUuids: MutableSet<String> = linkedSetOf(),
-        var remoteImportedTimestamps: MutableMap<String, Long> = linkedMapOf(),
-    )
-
-    data class ImportPlayersResult(
-        val importedCount: Int,
-        val skippedCount: Int,
-    )
-
-    private data class LookupCaches(
-        val version: Long = 0L,
-        val localListedUsernames: Set<String> = emptySet(),
-        val localIgnoredUsernames: Set<String> = emptySet(),
-        val miscIgnoredUsernames: List<String> = emptyList(),
-        val miscIgnoredUsernameSet: Set<String> = emptySet(),
-        val hiddenRemoteUuids: Set<String> = emptySet(),
-    )
-
-    private data class LegacyThrowerListConfig(
-        var enabled: Boolean = true,
-        var lobbyNotifications: Boolean = true,
-        var assumePartyLeader: Boolean = false,
-        var hypixelApiKey: String? = null,
-        var players: MutableList<PlayerEntry> = mutableListOf(),
-        var hiddenRemoteUuids: MutableSet<String> = linkedSetOf(),
-        var remoteImportedTimestamps: MutableMap<String, Long> = linkedMapOf(),
-    )
 }

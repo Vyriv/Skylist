@@ -9,6 +9,8 @@
     "LivingEntityRenderStateMixin",
     "EntityRendererMixin",
     "InGameHudMixin",
+    "InGameHudSidebarEntryAccessor",
+    "InGameHudSidebarEntryInvoker",
     "LabelCommandRendererMixin",
     "LivingEntityRendererMixin",
     "PlayerEntityRendererMixin",

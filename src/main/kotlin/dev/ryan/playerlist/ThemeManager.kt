@@ -156,7 +156,9 @@ object ThemeManager {
             }
             append(json)
         }
-        Files.writeString(themeFilePath(themeName), body)
+        // Theme files are plain text configuration files stored under the mod config folder.
+        // This writes local JSON-like theme data only. It never writes or executes code.
+        writeJsonLikeTextFile(themeFilePath(themeName), body)
     }
 
     private fun readThemeFile(themeName: String): ThemeFile {

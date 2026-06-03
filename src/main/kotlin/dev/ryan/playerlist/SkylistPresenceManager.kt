@@ -13,8 +13,10 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 
 object SkylistPresenceManager {
-    private const val redPrefixLegacy = "\u00A7c<3 \u00A7r"
-    private const val pinkPrefixLegacy = "\u00A7d<3 \u00A7r"
+    // Legacy-formatted heart prefix strings using Minecraft's standard section-sign format code.
+    // `§c` = red, `§d` = light purple/pink, `§r` = reset. These are display-only chat prefixes.
+    private const val redPrefixLegacy = "§c<3 §r"
+    private const val pinkPrefixLegacy = "§d<3 §r"
 
     private data class PresenceEntry(
         val uuid: String,
@@ -35,7 +37,7 @@ object SkylistPresenceManager {
 
     fun refreshAsync(): CompletableFuture<Unit> =
         CompletableFuture.runAsync {
-            runCatching { WorkerRelay.fetchJson("/v1/skylist/presence") }
+            runCatching { SkylistApiClient.fetchJson("/v1/skylist/presence") }
                 .onSuccess { response ->
                     rebuildLookups(response?.getAsJsonArray("entries") ?: JsonArray())
                 }
@@ -60,13 +62,17 @@ object SkylistPresenceManager {
 
         CompletableFuture.runAsync {
             runCatching {
+                // Presence publishing is opt-in mod metadata only. The payload contains the
+                // current player's UUID, username, and whether Skylist/SkylistPlus is loaded
+                // so other clients can display a small identifier. No tokens, credentials,
+                // chat logs, Discord data, or local files are read or transmitted here.
                 val payload = JsonObject().apply {
                     addProperty("uuid", uuid)
                     addProperty("username", username)
                     addProperty("hasSkylist", true)
                     addProperty("hasSkylistPlus", hasSkylistPlus)
                 }
-                WorkerRelay.postJson("/v1/skylist/presence", payload.toString())
+                SkylistApiClient.postJson("/v1/skylist/presence", payload.toString())
             }.onFailure {
                 PlayerListMod.logger.warn("Failed to publish Skylist startup presence", it)
             }
@@ -132,17 +138,20 @@ object SkylistPresenceManager {
 
     private fun localPresenceEntry(uuid: String?, username: String?): PresenceEntry? {
         val client = PlayerListMod.client
-        val sessionUuid = client.session.uuidOrNull?.toString()
-        val sessionName = client.session.username
-        val matchesSelf = normalizeUuid(uuid) == normalizeUuid(sessionUuid) ||
-            (normalizeUsername(username) != null && normalizeUsername(username) == normalizeUsername(sessionName))
-        if (!matchesSelf) {
+        val currentPlayerUuid = client.session.uuidOrNull?.toString()
+        val currentPlayerUsername = client.session.username
+        val matchesCurrentPlayer = normalizeUuid(uuid) == normalizeUuid(currentPlayerUuid) ||
+            (
+                normalizeUsername(username) != null &&
+                    normalizeUsername(username) == normalizeUsername(currentPlayerUsername)
+                )
+        if (!matchesCurrentPlayer) {
             return null
         }
 
         return PresenceEntry(
-            uuid = normalizeUuid(sessionUuid) ?: return null,
-            username = sessionName.takeIf { it.isNotBlank() },
+            uuid = normalizeUuid(currentPlayerUuid) ?: return null,
+            username = currentPlayerUsername.takeIf { it.isNotBlank() },
             hasSkylist = true,
             hasSkylistPlus = FabricLoader.getInstance().isModLoaded("skylistplus"),
         )

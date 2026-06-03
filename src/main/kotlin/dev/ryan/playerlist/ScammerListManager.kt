@@ -3,7 +3,6 @@ package dev.ryan.playerlist
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.google.gson.annotations.SerializedName
-import com.google.gson.reflect.TypeToken
 import net.fabricmc.loader.api.FabricLoader
 import java.net.URI
 import java.net.URLEncoder
@@ -81,7 +80,7 @@ object ScammerListManager {
         val removed = scammers.remove(normalizeUuid(uuid))
         if (removed != null) {
             ScammerCheckService.invalidateEntry(removed)
-            saveCache()
+            saveJsonCacheToConfigDirectory()
         }
         return removed != null
     }
@@ -111,7 +110,7 @@ object ScammerListManager {
         scammers.replaceAll { _, entry ->
             entry.withResolvedSeverity()
         }
-        saveCache()
+        saveJsonCacheToConfigDirectory()
     }
 
     fun queryByTarget(target: String): CompletableFuture<ScammerEntry?> {
@@ -158,7 +157,7 @@ object ScammerListManager {
 
     private fun fetchAndCache(path: String): ScammerEntry? {
         val request = HttpRequest.newBuilder()
-            .uri(URI.create(WorkerRelay.relayBaseUrl + path))
+            .uri(URI.create(SkylistApiClient.apiBaseUrl + path))
             .timeout(Duration.ofSeconds(10))
             .header("accept", "*/*")
             .GET()
@@ -196,7 +195,7 @@ object ScammerListManager {
     private fun storeScammer(entry: ScammerEntry) {
         scammers[normalizeUuid(entry.uuid)] = entry
         ScammerCheckService.invalidateEntry(entry)
-        saveCache()
+        saveJsonCacheToConfigDirectory()
         resolveUsernames(entry)
     }
 
@@ -208,10 +207,11 @@ object ScammerListManager {
         }
 
         runCatching {
-            val type = object : TypeToken<List<ScammerEntry>>() {}.type
-            val loaded = ConfigManager.gson.fromJson<List<ScammerEntry>>(Files.readString(loadPath), type).orEmpty()
+            val loadedEntries = ConfigManager.gson.fromJson(Files.readString(loadPath), Array<ScammerEntry>::class.java)
+                ?.toList()
+                .orEmpty()
             scammers.clear()
-            loaded.forEach { entry ->
+            loadedEntries.forEach { entry ->
                 val normalizedEntry = ScammerEntry(
                     uuid = normalizeUuid(entry.uuid),
                     username = entry.username,
@@ -239,17 +239,21 @@ object ScammerListManager {
                 resolveUsernames(normalizedEntry)
             }
             if (loadPath == legacyCachePath) {
-                saveCache()
+                saveJsonCacheToConfigDirectory()
             }
         }.onFailure {
             PlayerListMod.logger.warn("Failed to load scammer cache", it)
         }
     }
 
-    private fun saveCache() {
+    // Writes the local scammer list as a plain JSON file inside the Skylist config directory.
+    // The file contains only serialized ScammerEntry records fetched from the SBZ API.
+    // It is a local config cache, not an executable payload, and is always written inside
+    // FabricLoader configDir / playerlist — never outside it.
+    private fun saveJsonCacheToConfigDirectory() {
         runCatching {
-            Files.createDirectories(cachePath.parent)
-            Files.writeString(cachePath, ConfigManager.gson.toJson(listEntries()))
+            // This writes local JSON cache data only. It never writes or executes code.
+            writeJsonCacheFile(cachePath, ConfigManager.gson.toJson(listEntries()))
         }.onFailure {
             PlayerListMod.logger.warn("Failed to save scammer cache", it)
         }
@@ -458,7 +462,7 @@ object ScammerListManager {
                         existing.copy(altUsernames = existing.altUuids.map { altUuid -> usernameCache[altUuid] ?: altUuid }).withResolvedSeverity()
                     }
                 }
-                saveCache()
+                saveJsonCacheToConfigDirectory()
             }
         }
     }

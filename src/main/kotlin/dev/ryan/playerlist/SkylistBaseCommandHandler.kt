@@ -77,7 +77,7 @@ object SkylistBaseCommandHandler {
                 }
                 Command.SINGLE_SUCCESS
             }
-                .then(literal("update").executes(::installLatestUpdate)),
+                .then(literal("update").executes(::showUpdateStatus)),
             )
             .then(literal("help").executes(::printHelp))
             .then(devCommands()
@@ -174,7 +174,6 @@ object SkylistBaseCommandHandler {
     private fun printVersionInfo(context: CommandContext<FabricClientCommandSource>): Int {
         val currentVersion = RuntimeVersion.currentVersion()
         val latestKnownVersion = GitHubUpdateChecker.latestKnownVersionForCurrentMinecraft()
-        val jarPath = RuntimeVersion.currentJarPath()
         context.source.sendFeedback(
             tlMessage(
                 Text.literal("Installed version: ").formatted(Formatting.GREEN)
@@ -193,20 +192,14 @@ object SkylistBaseCommandHandler {
                             Text.literal(" | Latest known: ").formatted(Formatting.GREEN)
                                 .append(Text.literal(it).formatted(Formatting.AQUA))
                         } ?: Text.empty(),
-                    )
-                    .append(
-                        jarPath?.let {
-                            Text.literal(" | Jar: ").formatted(Formatting.GREEN)
-                                .append(Text.literal(it.fileName.toString()).formatted(Formatting.GRAY))
-                        } ?: Text.empty(),
                     ),
             ),
         )
         return Command.SINGLE_SUCCESS
     }
 
-    private fun installLatestUpdate(context: CommandContext<FabricClientCommandSource>): Int {
-        GitHubUpdateChecker.installLatestUpdate(context.source)
+    private fun showUpdateStatus(context: CommandContext<FabricClientCommandSource>): Int {
+        GitHubUpdateChecker.showUpdateStatus(context.source)
         return Command.SINGLE_SUCCESS
     }
 
