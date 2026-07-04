@@ -5,9 +5,9 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.mojang.authlib.GameProfile
 import net.fabricmc.loader.api.FabricLoader
-import net.minecraft.text.MutableText
-import net.minecraft.text.Text
-import net.minecraft.util.Formatting
+import net.minecraft.network.chat.MutableComponent
+import net.minecraft.network.chat.Component
+import net.minecraft.ChatFormatting
 import java.util.Locale
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
@@ -27,8 +27,8 @@ object SkylistPresenceManager {
 
     private val uuidEntries = ConcurrentHashMap<String, PresenceEntry>()
     private val usernameEntries = ConcurrentHashMap<String, PresenceEntry>()
-    private val redPrefix: Text = Text.literal("<3 ").formatted(Formatting.RED)
-    private val pinkPrefix: Text = Text.literal("<3 ").formatted(Formatting.LIGHT_PURPLE)
+    private val redPrefix: Text = Component.literal("<3 ").formatted(ChatFormatting.RED)
+    private val pinkPrefix: Text = Component.literal("<3 ").formatted(ChatFormatting.LIGHT_PURPLE)
 
     fun initialize() {
         refreshAsync()
@@ -93,7 +93,7 @@ object SkylistPresenceManager {
             return text
         }
 
-        return Text.empty()
+        return Component.empty()
             .append(prefixForEntry(entry).copy())
             .append(text.copy())
     }
@@ -108,7 +108,7 @@ object SkylistPresenceManager {
             return text
         }
 
-        return Text.empty()
+        return Component.empty()
             .append(prefixForEntry(entry).copy())
             .append(text.copy())
     }

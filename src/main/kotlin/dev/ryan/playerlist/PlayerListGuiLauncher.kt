@@ -1,8 +1,8 @@
 package dev.ryan.playerlist
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
-import net.minecraft.client.gui.screen.ChatScreen
-import net.minecraft.client.gui.screen.Screen
+import net.minecraft.client.gui.screens.ChatScreen
+import net.minecraft.client.gui.screens.Screen
 
 object PlayerListGuiLauncher {
     data class ScreenRequest(

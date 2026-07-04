@@ -1,9 +1,9 @@
 package dev.ryan.playerlist
 
-import net.minecraft.text.MutableText
-import net.minecraft.text.Style
-import net.minecraft.text.Text
-import net.minecraft.util.Formatting
+import net.minecraft.network.chat.MutableComponent
+import net.minecraft.network.chat.Style
+import net.minecraft.network.chat.Component
+import net.minecraft.ChatFormatting
 import java.util.Optional
 
 internal object LegacyMinecraftTextStyler {
@@ -56,17 +56,17 @@ internal object LegacyMinecraftTextStyler {
 
     fun parseLegacyFormattedText(raw: String): Text {
         if (LEGACY_MINECRAFT_FORMAT_CODE !in raw) {
-            return Text.literal(raw)
+            return Component.literal(raw)
         }
 
-        val output = Text.empty()
+        val output = Component.empty()
         var activeStyle = Style.EMPTY
         val plainTextBuffer = StringBuilder()
         var rawIndex = 0
 
         fun flushBufferedText() {
             if (plainTextBuffer.isNotEmpty()) {
-                output.append(Text.literal(plainTextBuffer.toString()).setStyle(activeStyle))
+                output.append(Component.literal(plainTextBuffer.toString()).setStyle(activeStyle))
                 plainTextBuffer.clear()
             }
         }
@@ -117,7 +117,7 @@ internal object LegacyMinecraftTextStyler {
     }
 
     fun normalizeLegacyText(message: Text): Text {
-        val rebuiltText = Text.empty()
+        val rebuiltText = Component.empty()
         var changed = false
         message.visit({ style, segment ->
             if (segment.isEmpty()) {
@@ -128,16 +128,16 @@ internal object LegacyMinecraftTextStyler {
                 appendLegacySegment(rebuiltText, segment, style)
                 changed = true
             } else {
-                rebuiltText.append(Text.literal(segment).setStyle(style))
+                rebuiltText.append(Component.literal(segment).setStyle(style))
             }
             Optional.empty<Unit>()
         }, Style.EMPTY)
         return if (changed) rebuiltText else message
     }
 
-    fun appendLegacySegment(target: MutableText, raw: String, baseStyle: Style) {
+    fun appendLegacySegment(target: MutableComponent, raw: String, baseStyle: Style) {
         parseLegacyFormattedText(raw).visit({ style, segment ->
-            target.append(Text.literal(segment).setStyle(style.withParent(baseStyle)))
+            target.append(Component.literal(segment).setStyle(style.withParent(baseStyle)))
             Optional.empty<Unit>()
         }, Style.EMPTY)
     }
@@ -255,7 +255,7 @@ internal object LegacyMinecraftTextStyler {
     private fun applyLegacyCode(style: Style, code: Char): Style =
         when (code) {
             in '0'..'9', in 'a'..'f' -> {
-                val formatting = Formatting.byCode(code) ?: return Style.EMPTY
+                val formatting = ChatFormatting.getByCode(code) ?: return Style.EMPTY
                 Style.EMPTY.withColor(formatting)
             }
             'k' -> style.withObfuscated(true)
@@ -278,7 +278,7 @@ internal object LegacyMinecraftTextStyler {
 
             outputStyle = when (val code = codes[index + 1].lowercaseChar()) {
                 in '0'..'9', in 'a'..'f' -> {
-                    val formatting = Formatting.byCode(code)
+                    val formatting = ChatFormatting.getByCode(code)
                     if (formatting != null) outputStyle.withColor(formatting) else outputStyle
                 }
                 'k' -> outputStyle.withObfuscated(true)

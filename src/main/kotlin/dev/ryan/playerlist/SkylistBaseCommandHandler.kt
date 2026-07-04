@@ -3,15 +3,15 @@ package dev.ryan.playerlist
 import com.mojang.brigadier.Command
 import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.context.CommandContext
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.argument
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands.argument
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource
-import net.minecraft.text.ClickEvent
-import net.minecraft.text.HoverEvent
-import net.minecraft.text.MutableText
-import net.minecraft.text.Text
-import net.minecraft.util.Formatting
+import net.minecraft.network.chat.ClickEvent
+import net.minecraft.network.chat.HoverEvent
+import net.minecraft.network.chat.MutableComponent
+import net.minecraft.network.chat.Component
+import net.minecraft.ChatFormatting
 import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.util.UUID
@@ -120,7 +120,7 @@ object SkylistBaseCommandHandler {
 
     private fun printHelp(context: CommandContext<FabricClientCommandSource>): Int {
         val source = context.source
-        source.sendFeedback(Text.literal("Skylist commands:").formatted(Formatting.GOLD))
+        source.sendFeedback(Component.literal("Skylist commands:").formatted(ChatFormatting.GOLD))
         source.sendFeedback(helpLine("gui", "[target]"))
         source.sendFeedback(helpLine("list", "scammers"))
         source.sendFeedback(helpLine("check", "<username/uuid/discordId>"))
@@ -142,8 +142,8 @@ object SkylistBaseCommandHandler {
         ConfigManager.setAssumePartyLeader(enabled)
         context.source.sendFeedback(
             tlMessage(
-                Text.literal("Skylist assume party leader is now ").formatted(Formatting.GREEN)
-                    .append(Text.literal(enabled.toString().uppercase()).formatted(if (enabled) Formatting.GREEN else Formatting.RED)),
+                Component.literal("Skylist assume party leader is now ").formatted(ChatFormatting.GREEN)
+                    .append(Component.literal(enabled.toString().uppercase()).formatted(if (enabled) ChatFormatting.GREEN else ChatFormatting.RED)),
             ),
         )
         return Command.SINGLE_SUCCESS
@@ -153,8 +153,8 @@ object SkylistBaseCommandHandler {
         val disabled = ConfigManager.toggleCustomCapesDisabled()
         context.source.sendFeedback(
             tlMessage(
-                Text.literal("Custom cape cosmetics are now ").formatted(Formatting.GREEN)
-                    .append(Text.literal(if (disabled) "DISABLED" else "ENABLED").formatted(if (disabled) Formatting.RED else Formatting.GREEN)),
+                Component.literal("Custom cape cosmetics are now ").formatted(ChatFormatting.GREEN)
+                    .append(Component.literal(if (disabled) "DISABLED" else "ENABLED").formatted(if (disabled) ChatFormatting.RED else ChatFormatting.GREEN)),
             ),
         )
         return Command.SINGLE_SUCCESS
@@ -164,8 +164,8 @@ object SkylistBaseCommandHandler {
         val disabled = ConfigManager.toggleCustomScalerDisabled()
         context.source.sendFeedback(
             tlMessage(
-                Text.literal("Custom player scaler is now ").formatted(Formatting.GREEN)
-                    .append(Text.literal(if (disabled) "DISABLED" else "ENABLED").formatted(if (disabled) Formatting.RED else Formatting.GREEN)),
+                Component.literal("Custom player scaler is now ").formatted(ChatFormatting.GREEN)
+                    .append(Component.literal(if (disabled) "DISABLED" else "ENABLED").formatted(if (disabled) ChatFormatting.RED else ChatFormatting.GREEN)),
             ),
         )
         return Command.SINGLE_SUCCESS
@@ -176,22 +176,22 @@ object SkylistBaseCommandHandler {
         val latestKnownVersion = GitHubUpdateChecker.latestKnownVersionForCurrentMinecraft()
         context.source.sendFeedback(
             tlMessage(
-                Text.literal("Installed version: ").formatted(Formatting.GREEN)
+                Component.literal("Installed version: ").formatted(ChatFormatting.GREEN)
                     .append(
-                        Text.literal(currentVersion)
-                            .formatted(Formatting.YELLOW)
+                        Component.literal(currentVersion)
+                            .formatted(ChatFormatting.YELLOW)
                             .styled {
                                 it.withClickEvent(ClickEvent.OpenUrl(URI.create(PlayerListLinks.githubReleasesUrl)))
-                                    .withHoverEvent(HoverEvent.ShowText(Text.literal("Open Skylist GitHub releases")))
+                                    .withHoverEvent(HoverEvent.ShowText(Component.literal("Open Skylist GitHub releases")))
                             },
                     )
-                    .append(Text.literal(" | Minecraft: ").formatted(Formatting.GREEN))
-                    .append(Text.literal(RuntimeVersion.minecraftVersion().ifBlank { "unknown" }).formatted(Formatting.AQUA))
+                    .append(Component.literal(" | Minecraft: ").formatted(ChatFormatting.GREEN))
+                    .append(Component.literal(RuntimeVersion.minecraftVersion().ifBlank { "unknown" }).formatted(ChatFormatting.AQUA))
                     .append(
                         latestKnownVersion?.let {
-                            Text.literal(" | Latest known: ").formatted(Formatting.GREEN)
-                                .append(Text.literal(it).formatted(Formatting.AQUA))
-                        } ?: Text.empty(),
+                            Component.literal(" | Latest known: ").formatted(ChatFormatting.GREEN)
+                                .append(Component.literal(it).formatted(ChatFormatting.AQUA))
+                        } ?: Component.empty(),
                     ),
             ),
         )
@@ -215,15 +215,15 @@ object SkylistBaseCommandHandler {
 
                 source.sendFeedback(
                     tlMessage(
-                        Text.literal("UUID for ").formatted(Formatting.GREEN)
-                            .append(Text.literal(resolved.username).formatted(Formatting.GRAY))
-                            .append(Text.literal(" is ").formatted(Formatting.GREEN))
+                        Component.literal("UUID for ").formatted(ChatFormatting.GREEN)
+                            .append(Component.literal(resolved.username).formatted(ChatFormatting.GRAY))
+                            .append(Component.literal(" is ").formatted(ChatFormatting.GREEN))
                             .append(
-                                Text.literal(resolved.uuid)
-                                    .formatted(Formatting.AQUA, Formatting.UNDERLINE)
+                                Component.literal(resolved.uuid)
+                                    .formatted(ChatFormatting.AQUA, ChatFormatting.UNDERLINE)
                                     .styled {
                                         it.withClickEvent(ClickEvent.CopyToClipboard(resolved.uuid))
-                                            .withHoverEvent(HoverEvent.ShowText(Text.literal("Copy UUID")))
+                                            .withHoverEvent(HoverEvent.ShowText(Component.literal("Copy UUID")))
                                     },
                             ),
                     ),
@@ -243,7 +243,7 @@ object SkylistBaseCommandHandler {
         ConfigManager.setHypixelApiKey(apiKey)
         context.source.sendFeedback(
             tlMessage(
-                Text.literal("Saved Hypixel API key for local dev commands.").formatted(Formatting.GREEN),
+                Component.literal("Saved Hypixel API key for local dev commands.").formatted(ChatFormatting.GREEN),
             ),
         )
         return Command.SINGLE_SUCCESS
@@ -279,10 +279,10 @@ object SkylistBaseCommandHandler {
 
                     source.sendFeedback(
                         tlMessage(
-                            Text.literal("Linked Discord for ").formatted(Formatting.GREEN)
-                                .append(Text.literal(resolved.username).formatted(Formatting.GRAY))
-                                .append(Text.literal(": ").formatted(Formatting.GREEN))
-                                .append(Text.literal(lookup.discord).formatted(Formatting.AQUA)),
+                            Component.literal("Linked Discord for ").formatted(ChatFormatting.GREEN)
+                                .append(Component.literal(resolved.username).formatted(ChatFormatting.GRAY))
+                                .append(Component.literal(": ").formatted(ChatFormatting.GREEN))
+                                .append(Component.literal(lookup.discord).formatted(ChatFormatting.AQUA)),
                         ),
                     )
                 }
@@ -293,7 +293,7 @@ object SkylistBaseCommandHandler {
 
     private fun updateCosmetics(context: CommandContext<FabricClientCommandSource>): Int {
         val source = context.source
-        source.sendFeedback(tlMessage(Text.literal("Refreshing cosmetic player assignments from the live API...").formatted(Formatting.AQUA)))
+        source.sendFeedback(tlMessage(Component.literal("Refreshing cosmetic player assignments from the live API...").formatted(ChatFormatting.AQUA)))
 
         refreshCosmetics().whenComplete { _, throwable ->
             PlayerListMod.client.execute {
@@ -305,9 +305,9 @@ object SkylistBaseCommandHandler {
                     else -> {
                         source.sendFeedback(
                             tlMessage(
-                                Text.literal("Refreshed live cosmetic assignments for ${PlayerCustomizationRegistry.entries.size} player")
-                                    .formatted(Formatting.GREEN)
-                                    .append(Text.literal(if (PlayerCustomizationRegistry.entries.size == 1) "." else "s.").formatted(Formatting.GREEN)),
+                                Component.literal("Refreshed live cosmetic assignments for ${PlayerCustomizationRegistry.entries.size} player")
+                                    .formatted(ChatFormatting.GREEN)
+                                    .append(Component.literal(if (PlayerCustomizationRegistry.entries.size == 1) "." else "s.").formatted(ChatFormatting.GREEN)),
                             ),
                         )
                     }
@@ -331,8 +331,8 @@ object SkylistBaseCommandHandler {
         }
         source.sendFeedback(
             tlMessage(
-                Text.literal("Developer identifiers are now ").formatted(Formatting.GREEN)
-                    .append(Text.literal(if (enabled) "ENABLED" else "DISABLED").formatted(if (enabled) Formatting.GREEN else Formatting.RED)),
+                Component.literal("Developer identifiers are now ").formatted(ChatFormatting.GREEN)
+                    .append(Component.literal(if (enabled) "ENABLED" else "DISABLED").formatted(if (enabled) ChatFormatting.GREEN else ChatFormatting.RED)),
             ),
         )
         return Command.SINGLE_SUCCESS
@@ -365,7 +365,7 @@ object SkylistBaseCommandHandler {
                         buildResultMessage(outcome.verdict.username, outcome.verdict.reason, outcome.verdict.severityColor, outcome.verdict.severityResult),
                     )
 
-                    else -> source.sendFeedback(tlMessage(Text.literal("$target is not on the SBZ scammer list.").formatted(Formatting.GREEN)))
+                    else -> source.sendFeedback(tlMessage(Component.literal("$target is not on the SBZ scammer list.").formatted(ChatFormatting.GREEN)))
                 }
             }
         }
@@ -390,8 +390,8 @@ object SkylistBaseCommandHandler {
         val entry = ScammerListManager.addTestScammer(username, syntheticUuid, reason, System.currentTimeMillis())
         context.source.sendFeedback(
             tlMessage(
-                Text.literal("${entry.username} was added to the local scammer cache for \"${entry.reason}\".")
-                    .formatted(Formatting.GREEN),
+                Component.literal("${entry.username} was added to the local scammer cache for \"${entry.reason}\".")
+                    .formatted(ChatFormatting.GREEN),
             ),
         )
         return Command.SINGLE_SUCCESS
@@ -402,24 +402,24 @@ object SkylistBaseCommandHandler {
         reason: String,
         color: Int?,
         severityResult: ScammerListManager.SeverityResult? = null,
-    ): MutableText =
+    ): MutableComponent =
         tlMessage(
-            Text.literal(username).styled { style -> style.withColor((color ?: (Formatting.RED.colorValue ?: 0xFF5555)) and 0xFFFFFF) }
-                .append(Text.literal(" is on the SBZ scammer list for ").formatted(Formatting.RED))
-                .append(Text.literal("\"$reason\"").formatted(Formatting.GRAY))
+            Component.literal(username).styled { style -> style.withColor((color ?: (ChatFormatting.RED.colorValue ?: 0xFF5555)) and 0xFFFFFF) }
+                .append(Component.literal(" is on the SBZ scammer list for ").formatted(ChatFormatting.RED))
+                .append(Component.literal("\"$reason\"").formatted(ChatFormatting.GRAY))
                 .append(severityResultText(severityResult)),
         )
 
-    private fun severityResultText(severityResult: ScammerListManager.SeverityResult?): MutableText {
+    private fun severityResultText(severityResult: ScammerListManager.SeverityResult?): MutableComponent {
         if (severityResult == null) {
-            return Text.empty()
+            return Component.empty()
         }
-        return Text.empty()
-            .append(Text.literal("\nSeverity: ").formatted(Formatting.DARK_GRAY))
-            .append(Text.literal(severityResult.severity.label).styled { it.withColor(severityResult.severity.color and 0xFFFFFF) })
-            .append(Text.literal(" | Score: ${formatScore(severityResult.score)}").formatted(Formatting.YELLOW))
-            .append(Text.literal(" | Action: ${formatAction(severityResult.recommendedAction)}").formatted(Formatting.GOLD))
-            .append(Text.literal("\nWhy: ${severitySummary(severityResult)}").formatted(Formatting.GRAY))
+        return Component.empty()
+            .append(Component.literal("\nSeverity: ").formatted(ChatFormatting.DARK_GRAY))
+            .append(Component.literal(severityResult.severity.label).styled { it.withColor(severityResult.severity.color and 0xFFFFFF) })
+            .append(Component.literal(" | Score: ${formatScore(severityResult.score)}").formatted(ChatFormatting.YELLOW))
+            .append(Component.literal(" | Action: ${formatAction(severityResult.recommendedAction)}").formatted(ChatFormatting.GOLD))
+            .append(Component.literal("\nWhy: ${severitySummary(severityResult)}").formatted(ChatFormatting.GRAY))
     }
 
     private fun severitySummary(severityResult: ScammerListManager.SeverityResult): String =
@@ -431,48 +431,48 @@ object SkylistBaseCommandHandler {
     private fun formatScore(value: Double): String =
         if (value % 1.0 == 0.0) value.toLong().toString() else String.format("%.2f", value).trimEnd('0').trimEnd('.')
 
-    private fun helpLine(vararg segments: String): MutableText =
-        Text.literal("/")
-            .formatted(Formatting.DARK_GRAY)
-            .append(Text.literal("skylist ").formatted(Formatting.AQUA))
+    private fun helpLine(vararg segments: String): MutableComponent =
+        Component.literal("/")
+            .formatted(ChatFormatting.DARK_GRAY)
+            .append(Component.literal("skylist ").formatted(ChatFormatting.AQUA))
             .also { line ->
                 segments.forEachIndexed { index, segment ->
                     if (index > 0) {
-                        line.append(Text.literal(" "))
+                        line.append(Component.literal(" "))
                     }
                     val color = when {
-                        segment.equals("assumepartyleader", ignoreCase = true) -> Formatting.YELLOW
-                        segment.equals("update", ignoreCase = true) -> Formatting.GREEN
-                        segment.equals("versioninfo", ignoreCase = true) -> Formatting.GOLD
-                        segment.equals("sethypixelapikey", ignoreCase = true) -> Formatting.GOLD
-                        segment.equals("get", ignoreCase = true) -> Formatting.AQUA
-                        segment.equals("uuid", ignoreCase = true) -> Formatting.AQUA
-                        segment.equals("discord", ignoreCase = true) -> Formatting.AQUA
-                        segment.equals("togglecapes", ignoreCase = true) -> Formatting.YELLOW
-                        segment.equals("togglescaler", ignoreCase = true) -> Formatting.YELLOW
-                        segment.equals("toggleidentifier", ignoreCase = true) -> Formatting.YELLOW
-                        segment.equals("updatecosmetics", ignoreCase = true) -> Formatting.GREEN
-                        segment.equals("true/false", ignoreCase = true) -> Formatting.GRAY
-                        segment.startsWith("<") && segment.endsWith(">") -> Formatting.GRAY
-                        else -> Formatting.WHITE
+                        segment.equals("assumepartyleader", ignoreCase = true) -> ChatFormatting.YELLOW
+                        segment.equals("update", ignoreCase = true) -> ChatFormatting.GREEN
+                        segment.equals("versioninfo", ignoreCase = true) -> ChatFormatting.GOLD
+                        segment.equals("sethypixelapikey", ignoreCase = true) -> ChatFormatting.GOLD
+                        segment.equals("get", ignoreCase = true) -> ChatFormatting.AQUA
+                        segment.equals("uuid", ignoreCase = true) -> ChatFormatting.AQUA
+                        segment.equals("discord", ignoreCase = true) -> ChatFormatting.AQUA
+                        segment.equals("togglecapes", ignoreCase = true) -> ChatFormatting.YELLOW
+                        segment.equals("togglescaler", ignoreCase = true) -> ChatFormatting.YELLOW
+                        segment.equals("toggleidentifier", ignoreCase = true) -> ChatFormatting.YELLOW
+                        segment.equals("updatecosmetics", ignoreCase = true) -> ChatFormatting.GREEN
+                        segment.equals("true/false", ignoreCase = true) -> ChatFormatting.GRAY
+                        segment.startsWith("<") && segment.endsWith(">") -> ChatFormatting.GRAY
+                        else -> ChatFormatting.WHITE
                     }
-                    line.append(Text.literal(segment).formatted(color))
+                    line.append(Component.literal(segment).formatted(color))
                 }
             }
 
     private fun isOwner(source: FabricClientCommandSource): Boolean =
         source.player.gameProfile.id == ownerUuid
 
-    private fun ownerOnlyError(): MutableText =
+    private fun ownerOnlyError(): MutableComponent =
         tlMessage("Only the mod owner can use this command")
 
-    private fun tlMessage(message: String): MutableText =
-        Text.empty()
-            .append(Text.literal("[SL] ").formatted(Formatting.AQUA))
-            .append(Text.literal(message))
+    private fun tlMessage(message: String): MutableComponent =
+        Component.empty()
+            .append(Component.literal("[SL] ").formatted(ChatFormatting.AQUA))
+            .append(Component.literal(message))
 
-    private fun tlMessage(message: Text): MutableText =
-        Text.empty()
-            .append(Text.literal("[SL] ").formatted(Formatting.AQUA))
+    private fun tlMessage(message: Text): MutableComponent =
+        Component.empty()
+            .append(Component.literal("[SL] ").formatted(ChatFormatting.AQUA))
             .append(message)
 }

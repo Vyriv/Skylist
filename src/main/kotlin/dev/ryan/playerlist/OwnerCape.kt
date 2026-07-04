@@ -1,7 +1,7 @@
 package dev.ryan.playerlist
 
 import com.mojang.authlib.GameProfile
-import net.minecraft.entity.player.SkinTextures
+import net.minecraft.world.entity.player.PlayerSkin
 import java.util.Locale
 import java.util.Optional
 
@@ -11,17 +11,17 @@ object OwnerCape {
     private data class CapeCacheKey(
         val version: Long,
         val profileKey: String,
-        val skinTextures: SkinTextures,
+        val skinTextures: PlayerSkin,
         val capeResourcePath: String?,
         val capeUrl: String?,
     )
 
-    private val capeCache = NameStylerLruCache<CapeCacheKey, SkinTextures>(cacheLimit)
+    private val capeCache = NameStylerLruCache<CapeCacheKey, PlayerSkin>(cacheLimit)
 
     @Volatile
     private var observedRegistryVersion = Long.MIN_VALUE
 
-    fun applyCustomCape(profile: GameProfile?, skinTextures: SkinTextures?): SkinTextures? {
+    fun applyCustomCape(profile: GameProfile?, skinTextures: PlayerSkin?): PlayerSkin? {
         if (skinTextures == null) {
             return null
         }
@@ -45,8 +45,8 @@ object OwnerCape {
         )
         capeCache.getCached(cacheKey)?.let { return it }
 
-        val overridden = skinTextures.withOverride(
-            SkinTextures.SkinOverride.create(
+        val overridden = skinTextures.with(
+            PlayerSkin.Patch.create(
                 Optional.empty(),
                 Optional.of(capeTexture),
                 Optional.empty(),

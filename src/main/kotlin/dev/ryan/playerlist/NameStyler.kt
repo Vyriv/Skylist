@@ -1,12 +1,12 @@
 package dev.ryan.playerlist
 
 import com.mojang.authlib.GameProfile
-import net.minecraft.client.MinecraftClient
-import net.minecraft.text.MutableText
-import net.minecraft.text.OrderedText
-import net.minecraft.text.StringVisitable
-import net.minecraft.text.Style
-import net.minecraft.text.Text
+import net.minecraft.client.Minecraft
+import net.minecraft.network.chat.MutableComponent
+import net.minecraft.util.FormattedCharSequence
+import net.minecraft.network.chat.FormattedText
+import net.minecraft.network.chat.Style
+import net.minecraft.network.chat.Component
 import java.util.Locale
 import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
@@ -38,18 +38,18 @@ object NameStyler {
     private val stringTransformCache = NameStylerLruCache<StringCacheKey, String>(stringCacheLimit)
     private val matchCache = NameStylerLruCache<MatchCacheKey, Boolean>(matchCacheLimit)
     private val orderedTextPlanCache = NameStylerLruCache<OrderedTextPlanCacheKey, OrderedTextPlanCacheValue>(matchCacheLimit)
-    private val orderedTextStaticResultCache = NameStylerLruCache<OrderedTextResultCacheKey, OrderedText>(textCacheLimit)
-    private val orderedTextAnimatedFrameCache = NameStylerLruCache<OrderedTextAnimatedFrameCacheKey, OrderedText>(matchCacheLimit)
+    private val orderedTextStaticResultCache = NameStylerLruCache<OrderedTextResultCacheKey, FormattedCharSequence>(textCacheLimit)
+    private val orderedTextAnimatedFrameCache = NameStylerLruCache<OrderedTextAnimatedFrameCacheKey, FormattedCharSequence>(matchCacheLimit)
     private val loggedAnimatedRenderPaths = ConcurrentHashMap.newKeySet<String>()
     private val gradientTextIdentityCache = NameStylerIdentityCache<Text, Text>(identityCacheSize)
     private val nameplateTextIdentityCache = NameStylerIdentityCache<Text, Text>(identityCacheSize)
     private val scoreboardTextIdentityCache = NameStylerIdentityCache<Text, Text>(identityCacheSize)
     private val sidebarTextIdentityCache = NameStylerIdentityCache<Text, Text>(identityCacheSize)
     private val chatHeaderTextIdentityCache = NameStylerIdentityCache<Text, Text>(identityCacheSize)
-    private val gradientOrderedTextIdentityCache = NameStylerIdentityCache<OrderedText, OrderedText>(identityCacheSize)
-    private val nameplateOrderedTextIdentityCache = NameStylerIdentityCache<OrderedText, OrderedText>(identityCacheSize)
-    private val scoreboardOrderedTextIdentityCache = NameStylerIdentityCache<OrderedText, OrderedText>(identityCacheSize)
-    private val orderedTextSourceCache = NameStylerIdentityCache<OrderedText, OrderedTextSourceData>(identityCacheSize)
+    private val gradientOrderedTextIdentityCache = NameStylerIdentityCache<FormattedCharSequence, FormattedCharSequence>(identityCacheSize)
+    private val nameplateOrderedTextIdentityCache = NameStylerIdentityCache<FormattedCharSequence, FormattedCharSequence>(identityCacheSize)
+    private val scoreboardOrderedTextIdentityCache = NameStylerIdentityCache<FormattedCharSequence, FormattedCharSequence>(identityCacheSize)
+    private val orderedTextSourceCache = NameStylerIdentityCache<FormattedCharSequence, OrderedTextSourceData>(identityCacheSize)
     private val debugLogTimes = ConcurrentHashMap<String, Long>()
     private val debugCounters = DebugCounters()
     private val debugCounterLastLog = AtomicLong(0L)
@@ -167,7 +167,7 @@ object NameStyler {
 
     fun isForceAnimatedNameUncached(): Boolean = forceAnimatedNameUncached
 
-    fun hasAnimatedGradientInOrderedText(text: OrderedText): Boolean {
+    fun hasAnimatedGradientInOrderedText(text: FormattedCharSequence): Boolean {
         val version = currentRegistryVersion()
         val source = orderedTextSource(text, version).data
         val gradientPlan = orderedTextPlan(version, source.runs, source.plain, source.styleHash, TransformKind.GRADIENT_TEXT)
@@ -200,7 +200,7 @@ object NameStyler {
     fun styledSelfName(profile: GameProfile?): Text {
         val version = currentRegistryVersion()
         val customization = PlayerCustomizationRegistry.find(profile)
-            ?: return Text.literal(profile?.name ?: "")
+            ?: return Component.literal(profile?.name ?: "")
         val matchedName = profile?.name ?: customization.username
         return styledSelfName(version, matchedName, customization)
     }
@@ -208,7 +208,7 @@ object NameStyler {
     fun styledSelfName(name: String?): Text {
         val version = currentRegistryVersion()
         val customization = PlayerCustomizationRegistry.findByName(name)
-            ?: return Text.literal(name ?: "")
+            ?: return Component.literal(name ?: "")
         val matchedName = name ?: customization.username
         return styledSelfName(version, matchedName, customization)
     }
@@ -325,14 +325,14 @@ object NameStyler {
             rebuildVisitable(normalizedMessage, chatHeaderOnly = true, replaceMatchedName = true)
         }
 
-    fun applyGradientToVisitable(message: StringVisitable): StringVisitable = rebuildVisitable(message)
+    fun applyGradientToVisitable(message: FormattedText): FormattedText = rebuildVisitable(message)
 
-    fun applyGradientToOrderedText(text: OrderedText): OrderedText =
+    fun applyGradientToOrderedText(text: FormattedCharSequence): FormattedCharSequence =
         applyCachedOrderedTextTransform(text, TransformKind.GRADIENT_TEXT) { source, plan, animationTime ->
             rebuildOrderedTextFromPlan(source, plan, animationTime = animationTime)
         }
 
-    fun applyChatHeaderToOrderedText(text: OrderedText): OrderedText =
+    fun applyChatHeaderToOrderedText(text: FormattedCharSequence): FormattedCharSequence =
         applyCachedOrderedTextTransform(text, TransformKind.CHAT_HEADER_TEXT) { source, plan, animationTime ->
             rebuildOrderedTextFromPlan(
                 source,
@@ -342,7 +342,7 @@ object NameStyler {
             )
         }
 
-    fun applyNameplateDecorations(text: OrderedText): OrderedText =
+    fun applyNameplateDecorations(text: FormattedCharSequence): FormattedCharSequence =
         applyCachedOrderedTextTransform(text, TransformKind.NAMEPLATE_TEXT) { source, plan, animationTime ->
             rebuildOrderedTextFromPlan(
                 source,
@@ -352,7 +352,7 @@ object NameStyler {
             )
         }
 
-    fun applyScoreboardDecorations(text: OrderedText): OrderedText =
+    fun applyScoreboardDecorations(text: FormattedCharSequence): FormattedCharSequence =
         applyCachedOrderedTextTransform(text, TransformKind.SCOREBOARD_TEXT) { source, plan, animationTime ->
             rebuildOrderedTextFromPlan(
                 source,
@@ -687,10 +687,10 @@ object NameStyler {
     }
 
     private fun applyCachedOrderedTextTransform(
-        text: OrderedText,
+        text: FormattedCharSequence,
         kind: TransformKind,
         transform: (OrderedTextSourceData, OrderedTextTransformPlan, Double) -> Text?,
-    ): OrderedText {
+    ): FormattedCharSequence {
         incrementDebugCounter(debugCounters.orderedTextCalls)
         val cachedOrderedTextIdentity = orderedTextIdentityCache(kind).get(text)
         if (cachedOrderedTextIdentity != null) {
@@ -781,7 +781,7 @@ object NameStyler {
             TransformKind.CHAT_HEADER_TEXT -> chatHeaderTextIdentityCache
         }
 
-    private fun orderedTextIdentityCache(kind: TransformKind): NameStylerIdentityCache<OrderedText, OrderedText> =
+    private fun orderedTextIdentityCache(kind: TransformKind): NameStylerIdentityCache<FormattedCharSequence, FormattedCharSequence> =
         when (kind) {
             TransformKind.GRADIENT_TEXT,
             TransformKind.GRADIENT_STRING,
@@ -806,7 +806,7 @@ object NameStyler {
         textIdentityCache(kind).put(source, result)
     }
 
-    private fun cacheOrderedTextIdentity(kind: TransformKind, source: OrderedText, result: OrderedText) {
+    private fun cacheOrderedTextIdentity(kind: TransformKind, source: FormattedCharSequence, result: FormattedCharSequence) {
         orderedTextIdentityCache(kind).put(source, result)
     }
 
@@ -851,15 +851,15 @@ object NameStyler {
     }
 
     private fun runsToText(runs: List<StyledRun>): Text {
-        val output = Text.empty()
+        val output = Component.empty()
         runs.forEach { run ->
-            output.append(Text.literal(run.text).setStyle(run.style))
+            output.append(Component.literal(run.text).setStyle(run.style))
         }
         return output
     }
 
     private fun orderedTextSource(
-        text: OrderedText,
+        text: FormattedCharSequence,
         version: Long,
         bypassCache: Boolean = false,
     ): OrderedTextSourceLookup =
@@ -918,20 +918,20 @@ object NameStyler {
     private fun styledMatchText(match: ResolvedOrderedMatch, animationTime: Double): Text {
         val effectiveBaseStyle = applyCustomNameStyle(match.baseStyle, match.customization)
         if (match.isAnimatedGradient) {
-            val animatedStyle = match.animatedStyle ?: return Text.literal(match.content).setStyle(effectiveBaseStyle)
+            val animatedStyle = match.animatedStyle ?: return Component.literal(match.content).setStyle(effectiveBaseStyle)
             return gradientText(match.content, animatedStyle, effectiveBaseStyle, animationTime)
         }
         return cachedGradient(match.content, match.customization, match.baseStyle)
     }
 
     private fun rebuildVisitable(
-        message: StringVisitable,
+        message: FormattedText,
         includeBadges: Boolean = false,
         chatHeaderOnly: Boolean = false,
         terminalBadgesOnly: Boolean = false,
         replaceMatchedName: Boolean = false,
     ): Text {
-        val rebuilt = Text.empty()
+        val rebuilt = Component.empty()
         var changed = false
         val recentSegments = ArrayDeque<StyledSegment>()
         val plain = OrderedTextStyleSupport.plainText(message)
@@ -962,11 +962,11 @@ object NameStyler {
                     replaceMatchedName,
                 )
             } else if (decoratedSegment.isNotEmpty()) {
-                rebuilt.append(Text.literal(decoratedSegment).setStyle(style))
+                rebuilt.append(Component.literal(decoratedSegment).setStyle(style))
             }
 
             if (untouchedSegment.isNotEmpty()) {
-                rebuilt.append(Text.literal(untouchedSegment).setStyle(style))
+                rebuilt.append(Component.literal(untouchedSegment).setStyle(style))
             }
             LegacyMinecraftTextStyler.rememberStyledSegment(recentSegments, segment, style)
             Optional.empty<Unit>()
@@ -976,7 +976,7 @@ object NameStyler {
     }
 
     private fun rebuildOrderedText(
-        message: OrderedText,
+        message: FormattedCharSequence,
         includeBadges: Boolean = false,
         terminalBadgesOnly: Boolean = false,
     ): Text? {
@@ -1008,7 +1008,7 @@ object NameStyler {
             return null
         }
 
-        val rebuilt = Text.empty()
+        val rebuilt = Component.empty()
         val recentSegments = ArrayDeque<StyledSegment>()
         val plain = segments.joinToString(separator = "") { styledSegment -> styledSegment.second.toString() }
         var visibleIndex = 0
@@ -1027,7 +1027,7 @@ object NameStyler {
                     terminalBadgesOnly,
                 )
             } else {
-                rebuilt.append(Text.literal(segment).setStyle(style))
+                rebuilt.append(Component.literal(segment).setStyle(style))
             }
             LegacyMinecraftTextStyler.rememberStyledSegment(recentSegments, segment, style)
             visibleIndex += segment.length
@@ -1041,7 +1041,7 @@ object NameStyler {
         return rebuildGradientAcrossRuns(runs)
     }
 
-    private fun rebuildGradientAcrossSegments(message: OrderedText): Text? {
+    private fun rebuildGradientAcrossSegments(message: FormattedCharSequence): Text? {
         val runs = OrderedTextStyleSupport.collectRuns(message)
         return rebuildGradientAcrossRuns(runs)
     }
@@ -1053,7 +1053,7 @@ object NameStyler {
             return null
         }
 
-        val rebuilt = Text.empty()
+        val rebuilt = Component.empty()
         var changed = false
         var index = 0
 
@@ -1095,7 +1095,7 @@ object NameStyler {
     }
 
     private fun rebuildDecorationsAcrossSegments(
-        message: OrderedText,
+        message: FormattedCharSequence,
         includeBadges: Boolean,
         terminalBadgesOnly: Boolean = false,
         allowTruncatedPrefix: Boolean = false,
@@ -1125,7 +1125,7 @@ object NameStyler {
             return null
         }
 
-        val rebuilt = Text.empty()
+        val rebuilt = Component.empty()
         var changed = false
         var index = 0
 
@@ -1186,7 +1186,7 @@ object NameStyler {
         }
 
     private fun appendStyledSegment(
-        target: MutableText,
+        target: MutableComponent,
         segment: String,
         style: Style,
         recentSegments: ArrayDeque<StyledSegment>,
@@ -1208,7 +1208,7 @@ object NameStyler {
             val match = NameStyleMatcher.findFirstNameMatch(remaining, candidates)
 
             if (match == null) {
-                target.append(Text.literal(remaining).setStyle(style))
+                target.append(Component.literal(remaining).setStyle(style))
                 return
             }
 
@@ -1218,7 +1218,7 @@ object NameStyler {
             val matchedName = nameMatch.matchedName
 
             if (matchIndex > 0) {
-                target.append(Text.literal(remaining.substring(0, matchIndex)).setStyle(style))
+                target.append(Component.literal(remaining.substring(0, matchIndex)).setStyle(style))
             }
 
             val resolvedMatchedName = remaining.substring(matchIndex, matchIndex + matchedName.length)
@@ -1281,9 +1281,9 @@ object NameStyler {
     ): Text {
         val badge = customization.nameBadge ?: return nameText
         val output = nameText.copy()
-        output.append(Text.literal(" ").setStyle(baseStyle))
+        output.append(Component.literal(" ").setStyle(baseStyle))
         output.append(
-            Text.literal(badge.text).setStyle(
+            Component.literal(badge.text).setStyle(
                 baseStyle
                     .withColor(badge.color)
                     .withBold(badge.bold),
@@ -1402,7 +1402,7 @@ object NameStyler {
             }
 
             val animatedStyle = resolveAnimatedGradientStyle(customization)
-                ?: return Text.literal(content).setStyle(effectiveBaseStyle)
+                ?: return Component.literal(content).setStyle(effectiveBaseStyle)
             logAnimatedRender(content, customization)
             return gradientText(content, animatedStyle, effectiveBaseStyle, currentAnimationTime())
         }
@@ -1414,7 +1414,7 @@ object NameStyler {
                 colors = customization.nameLetterColors,
             )
 
-            else -> return Text.literal(content).setStyle(effectiveBaseStyle)
+            else -> return Component.literal(content).setStyle(effectiveBaseStyle)
         }
 
         val cachedComponent = styledTextComponentCache.computeIfAbsent(cacheKey) {
@@ -1425,21 +1425,21 @@ object NameStyler {
             return cachedComponent.copy()
         }
 
-        val rebuiltText = Text.empty()
+        val rebuiltText = Component.empty()
         cachedComponent.visit({ style, segment ->
-            rebuiltText.append(Text.literal(segment).setStyle(style.withParent(effectiveBaseStyle)))
+            rebuiltText.append(Component.literal(segment).setStyle(style.withParent(effectiveBaseStyle)))
             Optional.empty<Unit>()
         }, Style.EMPTY)
         return rebuiltText
     }
 
     private fun multiColorText(content: String, colors: List<Int>, baseStyle: Style): Text {
-        val text = Text.empty()
-        val fallback = colors.lastOrNull() ?: return Text.literal(content).setStyle(baseStyle)
+        val text = Component.empty()
+        val fallback = colors.lastOrNull() ?: return Component.literal(content).setStyle(baseStyle)
 
         content.forEachIndexed { index, character ->
             val color = colors.getOrElse(index) { fallback }
-            text.append(Text.literal(character.toString()).setStyle(baseStyle.withColor(color)))
+            text.append(Component.literal(character.toString()).setStyle(baseStyle.withColor(color)))
         }
 
         return text
@@ -1456,12 +1456,12 @@ object NameStyler {
             colors = listOf(colors.left, colors.right),
         )
         val cachedComponent = styledTextComponentCache.computeIfAbsent(cacheKey) {
-            val gradientText = Text.empty()
+            val gradientText = Component.empty()
             val gradientSpacing = colors.spacing.coerceIn(1.0f, 10.0f)
             content.forEachIndexed { index, character ->
                 val progress = GradientColorMath.gradientFrequencyProgress(index, content.length, gradientSpacing)
                 val color = GradientColorMath.gradientLoopColor(colors.left, colors.right, progress)
-                gradientText.append(Text.literal(character.toString()).setStyle(Style.EMPTY.withColor(color)))
+                gradientText.append(Component.literal(character.toString()).setStyle(Style.EMPTY.withColor(color)))
             }
             gradientText
         }
@@ -1470,9 +1470,9 @@ object NameStyler {
             return cachedComponent.copy()
         }
 
-        val rebuiltText = Text.empty()
+        val rebuiltText = Component.empty()
         cachedComponent.visit({ style, segment ->
-            rebuiltText.append(Text.literal(segment).setStyle(style.withParent(baseStyle)))
+            rebuiltText.append(Component.literal(segment).setStyle(style.withParent(baseStyle)))
             Optional.empty<Unit>()
         }, Style.EMPTY)
         return rebuiltText
@@ -1484,11 +1484,11 @@ object NameStyler {
         baseStyle: Style,
         time: Double,
     ): Text {
-        val animatedGradientText = Text.empty()
+        val animatedGradientText = Component.empty()
 
         content.forEachIndexed { index, character ->
             val color = animatedStyle.getColor(index, content.length, time)
-            animatedGradientText.append(Text.literal(character.toString()).setStyle(baseStyle.withColor(color)))
+            animatedGradientText.append(Component.literal(character.toString()).setStyle(baseStyle.withColor(color)))
         }
 
         return animatedGradientText
@@ -1550,9 +1550,9 @@ object NameStyler {
         if (customization.nameBold) style.withBold(true) else style
 
     private fun currentAnimationTime(): Double {
-        val client = MinecraftClient.getInstance()
+        val client = Minecraft.getInstance()
         val world = client?.world ?: return 0.0
-        return world.time.toDouble() + client.renderTickCounter.getTickProgress(true).toDouble()
+        return world.defaultClockTime.toDouble() + client.renderTickCounter.getTickProgress(true).toDouble()
     }
 
     private fun currentAnimationFrameIndex(animationTime: Double): Long? {
@@ -1560,8 +1560,8 @@ object NameStyler {
             return null
         }
 
-        val client = MinecraftClient.getInstance()
-        val visiblePlayers = client?.world?.players?.size ?: 0
+        val client = Minecraft.getInstance()
+        val visiblePlayers = client?.world?.players()?.size ?: 0
         if (visiblePlayers < largeLobbyAnimationThreshold) {
             return null
         }
@@ -1622,7 +1622,7 @@ object NameStyler {
             TransformKind.DECORATED_STRING, TransformKind.DECORATED_DISPLAY_STRING -> "decorated-string"
             null -> "unknown"
         }
-        val client = MinecraftClient.getInstance()
+        val client = Minecraft.getInstance()
         val publicLobby = client != null && client.currentServerEntry != null && !client.isIntegratedServerRunning
         val speed = customization.nameAnimationSpeed ?: animatedGradientSpeed
         val logKey = "${customization.username.lowercase(Locale.ROOT)}|$renderPath|$publicLobby"
@@ -1685,7 +1685,7 @@ object NameStyler {
             }
 
         val animatedStyle = match.animatedStyle
-        val world = MinecraftClient.getInstance().world
+        val world = Minecraft.getInstance().world
         val animationTime = currentAnimationTime()
         lastDebugTransform.set(
             DebugTransformMetadata(
@@ -1694,7 +1694,7 @@ object NameStyler {
                 matchedPlayer = match.customization.username,
                 styleMode = if (match.isAnimatedGradient) "animated_gradient" else "static",
                 animated = match.isAnimatedGradient,
-                worldTime = world?.time ?: -1L,
+                worldTime = world?.defaultClockTime ?: -1L,
                 animationTime = animationTime,
                 animationOffset = animatedStyle?.offsetAt(animationTime) ?: 0f,
                 finalOrderedTextCacheUsed = finalOrderedTextCacheUsed,
@@ -1740,9 +1740,9 @@ object NameStyler {
             return
         }
 
-        val client = MinecraftClient.getInstance()
+        val client = Minecraft.getInstance()
         val world = client.world
-        val visiblePlayers = world?.players?.size ?: 0
+        val visiblePlayers = world?.players()?.size ?: 0
         val lobbyType = when {
             client.isIntegratedServerRunning -> "singleplayer"
             client.currentServerEntry != null -> "multiplayer-public"
@@ -1783,13 +1783,13 @@ object NameStyler {
     }
 
     private fun shouldDebugPlayer(playerName: String): Boolean {
-        val client = MinecraftClient.getInstance()
+        val client = Minecraft.getInstance()
         val self = client.player?.gameProfile?.name?.lowercase(Locale.ROOT)
         if (playerName.lowercase(Locale.ROOT) == self) {
             return true
         }
 
-        val otherAnimated = client.world?.players
+        val otherAnimated = client.world?.players()
             ?.asSequence()
             ?.mapNotNull { player ->
                 PlayerCustomizationRegistry.find(player.gameProfile)

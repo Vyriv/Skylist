@@ -1,14 +1,14 @@
 package dev.ryan.playerlist
 
-import net.minecraft.client.MinecraftClient
-import net.minecraft.text.Text
+import net.minecraft.client.Minecraft
+import net.minecraft.network.chat.Component
 import java.util.Locale
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 class KickQueue(
-    private val client: MinecraftClient,
+    private val client: Minecraft,
     private val isMemberPresent: (String) -> Boolean,
 ) {
     private val scheduler = Executors.newSingleThreadScheduledExecutor()
@@ -99,7 +99,7 @@ class KickQueue(
     }
 
     private fun failCurrentKick(target: KickTarget) {
-        client.player?.sendMessage(Text.literal("Could not kick user!"), false)
+        client.player?.sendMessage(Component.literal("Could not kick user!"), false)
         val shouldFail = synchronized(lock) {
             if (activeTarget?.uuid.equals(target.uuid, ignoreCase = true)) {
                 activeTarget = null

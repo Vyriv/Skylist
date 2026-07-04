@@ -1,10 +1,10 @@
 package dev.ryan.playerlist.mixin;
 
 import dev.ryan.playerlist.NameStyler;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.render.state.TextGuiElementRenderState;
-import net.minecraft.text.OrderedText;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.renderer.state.gui.GuiTextRenderState;
+import net.minecraft.util.FormattedCharSequence;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Mutable;
@@ -14,13 +14,13 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(TextGuiElementRenderState.class)
+@Mixin(GuiTextRenderState.class)
 public abstract class TextGuiElementRenderStateMixin {
     @Unique
-    private OrderedText playerlist$sourceOrderedText;
+    private FormattedCharSequence playerlist$sourceOrderedText;
 
     @Unique
-    private OrderedText playerlist$styledOrderedText;
+    private FormattedCharSequence playerlist$styledOrderedText;
 
     @Unique
     private boolean playerlist$animatedOrderedText;
@@ -29,26 +29,26 @@ public abstract class TextGuiElementRenderStateMixin {
     private long playerlist$styledFrameIndex = Long.MIN_VALUE;
 
     @Shadow @Final @Mutable
-    private OrderedText orderedText;
+    public FormattedCharSequence text;
 
     @Shadow
-    private TextRenderer.GlyphDrawable preparation;
+    private Font.PreparedText preparedText;
 
     @Inject(
-        method = "prepare()Lnet/minecraft/client/font/TextRenderer$GlyphDrawable;",
+        method = "ensurePrepared()Lnet/minecraft/client/gui/Font$PreparedText;",
         at = @At("HEAD")
     )
-    private void playerlist$decorateQueuedHudText(CallbackInfoReturnable<Object> cir) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (this.orderedText == null ||
+    private void playerlist$decorateQueuedHudText(CallbackInfoReturnable<Font.PreparedText> cir) {
+        Minecraft client = Minecraft.getInstance();
+        if (this.text == null ||
             !NameStyler.INSTANCE.hasGradientStyles() ||
             client == null ||
-            client.world == null ||
+            client.level == null ||
             client.player == null) {
             return;
         }
 
-        OrderedText current = this.orderedText;
+        FormattedCharSequence current = this.text;
         if (current != this.playerlist$styledOrderedText && current != this.playerlist$sourceOrderedText) {
             this.playerlist$sourceOrderedText = current;
             this.playerlist$styledOrderedText = null;
@@ -62,21 +62,21 @@ public abstract class TextGuiElementRenderStateMixin {
         if (this.playerlist$styledOrderedText != null &&
             (!this.playerlist$animatedOrderedText || frameIndex == this.playerlist$styledFrameIndex)) {
             NameStyler.INSTANCE.recordHudOrderedTextCacheHit();
-            if (this.orderedText != this.playerlist$styledOrderedText) {
-                this.preparation = null;
-                this.orderedText = this.playerlist$styledOrderedText;
+            if (this.text != this.playerlist$styledOrderedText) {
+                this.preparedText = null;
+                this.text = this.playerlist$styledOrderedText;
             }
             return;
         }
 
         NameStyler.INSTANCE.recordHudOrderedTextCacheMiss();
-        this.preparation = null;
+        this.preparedText = null;
         this.playerlist$styledOrderedText = NameStyler.INSTANCE.applyGradientToOrderedText(this.playerlist$sourceOrderedText);
         this.playerlist$styledFrameIndex = frameIndex;
-        this.orderedText = this.playerlist$styledOrderedText;
+        this.text = this.playerlist$styledOrderedText;
         NameStyler.INSTANCE.debugRenderReceipt(
             "gui-text-state",
-            "TextGuiElementRenderState.prepare",
+            "GuiTextRenderState.ensurePrepared",
             null,
             null,
             System.identityHashCode(this.playerlist$styledOrderedText),

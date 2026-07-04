@@ -1,8 +1,7 @@
 {
   "required": true,
   "package": "dev.ryan.playerlist.mixin",
-  "refmap": "playerlist.refmap.json",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "JAVA_25",
   "client": [
     "ChatHudMixin",
     "EntityMixin",
@@ -10,8 +9,6 @@
     "EntityRendererMixin",
     "InGameHudMixin",
     "InGameHudSidebarEntryAccessor",
-    "InGameHudSidebarEntryInvoker",
-    "LabelCommandRendererMixin",
     "LivingEntityRendererMixin",
     "PlayerEntityRendererMixin",
     "PlayerListEntryMixin",

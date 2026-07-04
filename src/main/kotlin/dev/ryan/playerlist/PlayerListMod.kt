@@ -2,7 +2,7 @@ package dev.ryan.playerlist
 
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
-import net.minecraft.client.MinecraftClient
+import net.minecraft.client.Minecraft
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -39,7 +39,7 @@ class PlayerListMod : ClientModInitializer {
         lateinit var listener: PartyListener
             private set
 
-        val client: MinecraftClient
-            get() = MinecraftClient.getInstance()
+        val client: Minecraft
+            get() = Minecraft.getInstance()
     }
 }

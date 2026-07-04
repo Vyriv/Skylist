@@ -6,7 +6,7 @@ It scans players in real time during trades, party joins, and other interactions
 
 ## **Supported Version**
 
-* Minecraft `1.21.11`
+* Minecraft `26.1.2`
 
 ## **Core Features**
 

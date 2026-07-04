@@ -1,15 +1,16 @@
 package dev.ryan.playerlist.mixin;
 
 import dev.ryan.playerlist.NameStyler;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.text.OrderedText;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
+import net.minecraft.util.FormattedCharSequence;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
-@Mixin(TextRenderer.class)
+@Mixin(Font.class)
 public abstract class TextRendererMixin {
     private static final ThreadLocal<Integer> playerlist$decorationDepth = ThreadLocal.withInitial(() -> 0);
 
@@ -18,9 +19,9 @@ public abstract class TextRendererMixin {
             return false;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         return client != null &&
-            client.world != null &&
+            client.level != null &&
             client.player != null &&
             playerlist$decorationDepth.get() == 0;
     }
@@ -30,9 +31,9 @@ public abstract class TextRendererMixin {
             return false;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         return client != null &&
-            client.world != null &&
+            client.level != null &&
             client.player != null &&
             playerlist$decorationDepth.get() == 0;
     }
@@ -52,7 +53,7 @@ public abstract class TextRendererMixin {
     }
 
     @ModifyVariable(
-        method = "draw(Ljava/lang/String;FFIZLorg/joml/Matrix4f;Lnet/minecraft/client/render/VertexConsumerProvider;Lnet/minecraft/client/font/TextRenderer$TextLayerType;II)V",
+        method = "drawInBatch(Ljava/lang/String;FFIZLorg/joml/Matrix4fc;Lnet/minecraft/client/renderer/MultiBufferSource;Lnet/minecraft/client/gui/Font$DisplayMode;II)V",
         at = @At("HEAD"),
         argsOnly = true
     )
@@ -65,19 +66,19 @@ public abstract class TextRendererMixin {
     }
 
     @ModifyVariable(
-        method = "draw(Lnet/minecraft/text/Text;FFIZLorg/joml/Matrix4f;Lnet/minecraft/client/render/VertexConsumerProvider;Lnet/minecraft/client/font/TextRenderer$TextLayerType;II)V",
+        method = "drawInBatch(Lnet/minecraft/network/chat/Component;FFIZLorg/joml/Matrix4fc;Lnet/minecraft/client/renderer/MultiBufferSource;Lnet/minecraft/client/gui/Font$DisplayMode;II)V",
         at = @At("HEAD"),
         argsOnly = true
     )
-    private Text playerlist$decorateDrawnText(Text text) {
+    private Component playerlist$decorateDrawnText(Component text) {
         if (text == null || !playerlist$shouldDecorateRenderedText()) {
             return text;
         }
 
-        Text styled = playerlist$decorateSafely(() -> NameStyler.INSTANCE.applyGradientToName(text));
+        Component styled = playerlist$decorateSafely(() -> NameStyler.INSTANCE.applyGradientToName(text));
         NameStyler.INSTANCE.debugRenderReceipt(
             "text-renderer",
-            "TextRenderer.draw(Text)",
+            "Font.drawInBatch(Component)",
             text.getString(),
             styled.getString(),
             System.identityHashCode(styled),
@@ -87,19 +88,19 @@ public abstract class TextRendererMixin {
     }
 
     @ModifyVariable(
-        method = "draw(Lnet/minecraft/text/OrderedText;FFIZLorg/joml/Matrix4f;Lnet/minecraft/client/render/VertexConsumerProvider;Lnet/minecraft/client/font/TextRenderer$TextLayerType;II)V",
+        method = "drawInBatch(Lnet/minecraft/util/FormattedCharSequence;FFIZLorg/joml/Matrix4fc;Lnet/minecraft/client/renderer/MultiBufferSource;Lnet/minecraft/client/gui/Font$DisplayMode;II)V",
         at = @At("HEAD"),
         argsOnly = true
     )
-    private OrderedText playerlist$decorateDrawnOrderedText(OrderedText text) {
+    private FormattedCharSequence playerlist$decorateDrawnOrderedText(FormattedCharSequence text) {
         if (!playerlist$shouldDecorateRenderedText()) {
             return text;
         }
 
-        OrderedText styled = playerlist$decorateSafely(() -> NameStyler.INSTANCE.applyGradientToOrderedText(text));
+        FormattedCharSequence styled = playerlist$decorateSafely(() -> NameStyler.INSTANCE.applyGradientToOrderedText(text));
         NameStyler.INSTANCE.debugRenderReceipt(
             "text-renderer",
-            "TextRenderer.draw(OrderedText)",
+            "Font.drawInBatch(FormattedCharSequence)",
             null,
             null,
             System.identityHashCode(styled),
@@ -109,19 +110,19 @@ public abstract class TextRendererMixin {
     }
 
     @ModifyVariable(
-        method = "drawWithOutline(Lnet/minecraft/text/OrderedText;FFIILorg/joml/Matrix4f;Lnet/minecraft/client/render/VertexConsumerProvider;I)V",
+        method = "drawInBatch8xOutline(Lnet/minecraft/util/FormattedCharSequence;FFIILorg/joml/Matrix4fc;Lnet/minecraft/client/renderer/MultiBufferSource;I)V",
         at = @At("HEAD"),
         argsOnly = true
     )
-    private OrderedText playerlist$decorateOutlinedText(OrderedText text) {
+    private FormattedCharSequence playerlist$decorateOutlinedText(FormattedCharSequence text) {
         if (!playerlist$shouldDecorateRenderedText()) {
             return text;
         }
 
-        OrderedText styled = playerlist$decorateSafely(() -> NameStyler.INSTANCE.applyGradientToOrderedText(text));
+        FormattedCharSequence styled = playerlist$decorateSafely(() -> NameStyler.INSTANCE.applyGradientToOrderedText(text));
         NameStyler.INSTANCE.debugRenderReceipt(
             "text-renderer",
-            "TextRenderer.drawWithOutline(OrderedText)",
+            "Font.drawInBatch8xOutline(FormattedCharSequence)",
             null,
             null,
             System.identityHashCode(styled),
@@ -131,7 +132,7 @@ public abstract class TextRendererMixin {
     }
 
     @ModifyVariable(
-        method = "getWidth(Ljava/lang/String;)I",
+        method = "width(Ljava/lang/String;)I",
         at = @At("HEAD"),
         argsOnly = true
     )
@@ -144,24 +145,25 @@ public abstract class TextRendererMixin {
     }
 
     @ModifyVariable(
-        method = "getWidth(Lnet/minecraft/text/StringVisitable;)I",
+        method = "width(Lnet/minecraft/network/chat/FormattedText;)I",
         at = @At("HEAD"),
         argsOnly = true
     )
-    private net.minecraft.text.StringVisitable playerlist$decorateMeasuredVisitable(net.minecraft.text.StringVisitable text) {
+    private FormattedText playerlist$decorateMeasuredVisitable(FormattedText text) {
         if (text == null || !playerlist$shouldDecorateMeasuredText()) {
             return text;
         }
 
         return playerlist$decorateSafely(() -> {
-            if (text instanceof Text styledText) {
+            if (text instanceof Component component) {
+                Component styled = component;
                 if (NameStyler.INSTANCE.hasChatHeaderStyles()) {
-                    styledText = NameStyler.INSTANCE.applyGradientToChatHeader(styledText);
+                    styled = NameStyler.INSTANCE.applyGradientToChatHeader(styled);
                 }
                 if (NameStyler.INSTANCE.hasGradientStyles()) {
-                    styledText = NameStyler.INSTANCE.applyGradientToName(styledText);
+                    styled = NameStyler.INSTANCE.applyGradientToName(styled);
                 }
-                return styledText;
+                return styled;
             }
 
             return NameStyler.INSTANCE.applyGradientToVisitable(text);
@@ -169,17 +171,17 @@ public abstract class TextRendererMixin {
     }
 
     @ModifyVariable(
-        method = "getWidth(Lnet/minecraft/text/OrderedText;)I",
+        method = "width(Lnet/minecraft/util/FormattedCharSequence;)I",
         at = @At("HEAD"),
         argsOnly = true
     )
-    private OrderedText playerlist$decorateMeasuredOrderedText(OrderedText text) {
+    private FormattedCharSequence playerlist$decorateMeasuredOrderedText(FormattedCharSequence text) {
         if (text == null || !playerlist$shouldDecorateMeasuredText()) {
             return text;
         }
 
         return playerlist$decorateSafely(() -> {
-            OrderedText styled = text;
+            FormattedCharSequence styled = text;
             if (NameStyler.INSTANCE.hasChatHeaderStyles()) {
                 styled = NameStyler.INSTANCE.applyChatHeaderToOrderedText(styled);
             }

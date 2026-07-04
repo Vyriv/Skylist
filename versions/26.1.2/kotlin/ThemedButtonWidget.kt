@@ -1,32 +1,30 @@
 package dev.ryan.playerlist
 
-import net.minecraft.client.font.DrawnTextConsumer
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.gui.widget.ButtonWidget
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.components.Button
+import net.minecraft.network.chat.Component
 
 class ThemedButtonWidget(
     x: Int,
     y: Int,
     width: Int,
     height: Int,
-    message: net.minecraft.text.Text,
-    onPress: PressAction,
-) : ButtonWidget(x, y, width, height, message, onPress, DEFAULT_NARRATION_SUPPLIER) {
+    message: Component,
+    onPress: OnPress,
+) : Button(x, y, width, height, message, onPress, DEFAULT_NARRATION) {
     init {
         setAlpha(0f)
     }
 
-    override fun drawIcon(context: DrawContext, x: Int, y: Int, deltaTicks: Float) = Unit
-
-    override fun drawLabel(consumer: DrawnTextConsumer) = Unit
+    override fun extractContents(context: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, deltaTicks: Float) = Unit
 
     companion object {
-        fun builder(message: net.minecraft.text.Text, onPress: PressAction): Builder = Builder(message, onPress)
+        fun builder(message: Component, onPress: OnPress): Builder = Builder(message, onPress)
     }
 
     class Builder(
-        private val message: net.minecraft.text.Text,
-        private val onPress: PressAction,
+        private val message: Component,
+        private val onPress: OnPress,
     ) {
         private var x: Int = 0
         private var y: Int = 0

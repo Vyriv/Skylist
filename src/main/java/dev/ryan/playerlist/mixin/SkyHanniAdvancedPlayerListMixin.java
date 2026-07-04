@@ -2,7 +2,7 @@ package dev.ryan.playerlist.mixin;
 
 import dev.ryan.playerlist.NameStyler;
 import dev.ryan.playerlist.SkylistPresenceManager;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
@@ -16,18 +16,18 @@ public abstract class SkyHanniAdvancedPlayerListMixin {
         method = "createTabLine",
         at = @At(
             value = "INVOKE",
-            target = "Lat/hannibal2/skyhanni/features/misc/compacttablist/TabLine;<init>(Lnet/minecraft/class_2561;Lat/hannibal2/skyhanni/features/misc/compacttablist/TabStringType;Lnet/minecraft/class_2561;)V"
+            target = "Lat/hannibal2/skyhanni/features/misc/compacttablist/TabLine;<init>(Lnet/minecraft/network/chat/Component;Lat/hannibal2/skyhanni/features/misc/compacttablist/TabStringType;Lnet/minecraft/network/chat/Component;)V"
         ),
         remap = false
     )
     private void playerlist$decorateCompactTabLine(Args args) {
-        Text current = (Text) args.get(2);
+        Component current = (Component) args.get(2);
         if (current == null) {
             return;
         }
 
-        Text styled = NameStyler.INSTANCE.applyNameplateDisplayDecorations(current);
-        Text identified = SkylistPresenceManager.INSTANCE.applyIdentifier(styled, current.getString());
+        Component styled = NameStyler.INSTANCE.applyNameplateDisplayDecorations(current);
+        Component identified = SkylistPresenceManager.INSTANCE.applyIdentifier(styled, current.getString());
         if (identified != current) {
             args.set(2, identified);
         }

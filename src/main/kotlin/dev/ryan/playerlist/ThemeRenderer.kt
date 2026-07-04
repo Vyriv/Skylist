@@ -1,47 +1,47 @@
 package dev.ryan.playerlist
 
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.gui.widget.ClickableWidget
-import net.minecraft.client.gui.widget.TextFieldWidget
-import net.minecraft.client.gl.RenderPipelines
-import net.minecraft.text.OrderedText
-import net.minecraft.util.Identifier
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.components.AbstractWidget
+import net.minecraft.client.gui.components.EditBox
+import net.minecraft.client.renderer.RenderPipelines
+import net.minecraft.util.FormattedCharSequence
+import net.minecraft.resources.Identifier
 
 object ThemeRenderer {
-    private val discordButtonTexture = Identifier.of("playerlist", "textures/gui/discord_button.png")
-    private val creditsButtonTexture = Identifier.of("playerlist", "textures/gui/credits_button.png")
-    private val settingsButtonTexture = Identifier.of("playerlist", "textures/gui/settings_button.png")
-    private val donationButtonTexture = Identifier.of("playerlist", "textures/gui/donation_button.png")
+    private val discordButtonTexture = Identifier.fromNamespaceAndPath("playerlist", "textures/gui/discord_button.png")
+    private val creditsButtonTexture = Identifier.fromNamespaceAndPath("playerlist", "textures/gui/credits_button.png")
+    private val settingsButtonTexture = Identifier.fromNamespaceAndPath("playerlist", "textures/gui/settings_button.png")
+    private val donationButtonTexture = Identifier.fromNamespaceAndPath("playerlist", "textures/gui/donation_button.png")
 
     fun opaqueTextColor(color: Int): Int = 0xFF000000.toInt() or (color and 0xFFFFFF)
 
-    fun drawText(context: DrawContext, text: net.minecraft.client.font.TextRenderer, value: String, x: Int, y: Int, color: Int) {
-        context.drawText(text, value, x, y, opaqueTextColor(color), false)
+    fun drawText(context: GuiGraphicsExtractor, text: net.minecraft.client.gui.Font, value: String, x: Int, y: Int, color: Int) {
+        context.text(text, value, x, y, opaqueTextColor(color), false)
     }
 
-    fun drawCenteredText(context: DrawContext, text: net.minecraft.client.font.TextRenderer, value: String, centerX: Int, y: Int, color: Int) {
+    fun drawCenteredText(context: GuiGraphicsExtractor, text: net.minecraft.client.gui.Font, value: String, centerX: Int, y: Int, color: Int) {
         drawText(context, text, value, centerX - text.getWidth(value) / 2, y, color)
     }
 
-    fun drawTextWithShadow(context: DrawContext, text: net.minecraft.client.font.TextRenderer, value: String, x: Int, y: Int, color: Int) {
-        context.drawTextWithShadow(text, value, x, y, opaqueTextColor(color))
+    fun drawTextWithShadow(context: GuiGraphicsExtractor, text: net.minecraft.client.gui.Font, value: String, x: Int, y: Int, color: Int) {
+        context.text(text, value, x, y, opaqueTextColor(color), true)
     }
 
-    fun drawTextWithShadow(context: DrawContext, text: net.minecraft.client.font.TextRenderer, value: OrderedText, x: Int, y: Int, color: Int) {
-        context.drawTextWithShadow(text, value, x, y, opaqueTextColor(color))
+    fun drawTextWithShadow(context: GuiGraphicsExtractor, text: net.minecraft.client.gui.Font, value: FormattedCharSequence, x: Int, y: Int, color: Int) {
+        context.text(text, value, x, y, opaqueTextColor(color), true)
     }
 
-    fun drawCenteredTextWithShadow(context: DrawContext, text: net.minecraft.client.font.TextRenderer, value: String, centerX: Int, y: Int, color: Int) {
+    fun drawCenteredTextWithShadow(context: GuiGraphicsExtractor, text: net.minecraft.client.gui.Font, value: String, centerX: Int, y: Int, color: Int) {
         drawTextWithShadow(context, text, value, centerX - text.getWidth(value) / 2, y, color)
     }
 
-    fun drawPanel(context: DrawContext, left: Int, top: Int, right: Int, bottom: Int, titleBarHeight: Int, theme: ThemePalette) {
+    fun drawPanel(context: GuiGraphicsExtractor, left: Int, top: Int, right: Int, bottom: Int, titleBarHeight: Int, theme: ThemePalette) {
         context.fill(left, top, right, bottom, theme.frameBackground)
         context.fill(left + 1, top + 1, right - 1, top + titleBarHeight, theme.secondaryPanel)
         drawOutline(context, left, top, right - left, bottom - top, theme.idleBorder)
     }
 
-    fun applyTextFieldInset(field: TextFieldWidget?) {
+    fun applyTextFieldInset(field: EditBox?) {
         if (field == null) {
             return
         }
@@ -51,7 +51,7 @@ object ThemeRenderer {
         field.y += layout.textFieldInsetY
     }
 
-    fun drawTextField(context: DrawContext, field: TextFieldWidget?, theme: ThemePalette) {
+    fun drawTextField(context: GuiGraphicsExtractor, field: EditBox?, theme: ThemePalette) {
         if (field == null) {
             return
         }
@@ -65,12 +65,12 @@ object ThemeRenderer {
         context.fill(left, top, right, bottom, theme.fieldBackground)
     }
 
-    fun textFieldPlaceholderX(field: TextFieldWidget): Int = field.x
+    fun textFieldPlaceholderX(field: EditBox): Int = field.x
 
-    fun textFieldPlaceholderY(field: TextFieldWidget): Int =
+    fun textFieldPlaceholderY(field: EditBox): Int =
         field.y + UiLayoutManager.rendering().textFieldPlaceholderYOffset
 
-    fun drawButton(context: DrawContext, widget: ClickableWidget?, mouseX: Double, mouseY: Double, mouseDown: Boolean, theme: ThemePalette) {
+    fun drawButton(context: GuiGraphicsExtractor, widget: AbstractWidget?, mouseX: Double, mouseY: Double, mouseDown: Boolean, theme: ThemePalette) {
         if (widget == null || !widget.visible) {
             return
         }
@@ -104,7 +104,7 @@ object ThemeRenderer {
     }
 
     fun drawDiscordButton(
-        context: DrawContext,
+        context: GuiGraphicsExtractor,
         x: Int,
         y: Int,
         size: Int,
@@ -115,20 +115,20 @@ object ThemeRenderer {
         drawIconButton(context, x, y, size, hovered, pressed, theme, discordButtonTexture)
     }
 
-    fun drawCreditsButton(context: DrawContext, x: Int, y: Int, size: Int, hovered: Boolean, pressed: Boolean, theme: ThemePalette) {
+    fun drawCreditsButton(context: GuiGraphicsExtractor, x: Int, y: Int, size: Int, hovered: Boolean, pressed: Boolean, theme: ThemePalette) {
         drawIconButton(context, x, y, size, hovered, pressed, theme, creditsButtonTexture)
     }
 
-    fun drawSettingsButton(context: DrawContext, x: Int, y: Int, size: Int, hovered: Boolean, pressed: Boolean, theme: ThemePalette) {
+    fun drawSettingsButton(context: GuiGraphicsExtractor, x: Int, y: Int, size: Int, hovered: Boolean, pressed: Boolean, theme: ThemePalette) {
         drawIconButton(context, x, y, size, hovered, pressed, theme, settingsButtonTexture)
     }
 
-    fun drawDonationButton(context: DrawContext, x: Int, y: Int, size: Int, hovered: Boolean, pressed: Boolean, theme: ThemePalette) {
+    fun drawDonationButton(context: GuiGraphicsExtractor, x: Int, y: Int, size: Int, hovered: Boolean, pressed: Boolean, theme: ThemePalette) {
         drawIconButton(context, x, y, size, hovered, pressed, theme, donationButtonTexture)
     }
 
     private fun drawIconButton(
-        context: DrawContext,
+        context: GuiGraphicsExtractor,
         x: Int,
         y: Int,
         size: Int,
@@ -156,7 +156,7 @@ object ThemeRenderer {
         // By setting regionWidth/Height to texSize (512), we map the entire 
         // high-resolution image to the small destination rectangle (size - 4).
         val texSize = 512
-        context.drawTexture(
+        context.blit(
             RenderPipelines.GUI_TEXTURED,
             texture,
             x + 2, y + 2,
@@ -167,13 +167,13 @@ object ThemeRenderer {
         )
     }
 
-    fun drawOutline(context: DrawContext, x: Int, y: Int, width: Int, height: Int, color: Int) {
+    fun drawOutline(context: GuiGraphicsExtractor, x: Int, y: Int, width: Int, height: Int, color: Int) {
         context.fill(x, y, x + width, y + 1, color)
         context.fill(x, y + height - 1, x + width, y + height, color)
         context.fill(x, y, x + 1, y + height, color)
         context.fill(x + width - 1, y, x + width, y + height, color)
     }
 
-    fun isWidgetHovered(widget: ClickableWidget, mouseX: Double, mouseY: Double): Boolean =
+    fun isWidgetHovered(widget: AbstractWidget, mouseX: Double, mouseY: Double): Boolean =
         mouseX >= widget.x && mouseX <= widget.x + widget.width && mouseY >= widget.y && mouseY <= widget.y + widget.height
 }

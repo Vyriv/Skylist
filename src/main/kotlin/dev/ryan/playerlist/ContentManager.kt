@@ -19,7 +19,7 @@ object ContentManager {
     private const val peopleResourcePath = "playerlist/content/people.json"
     private const val reasonsResourcePath = "playerlist/content/reasons.json"
     private const val uiTextResourcePath = "playerlist/content/ui_text.json"
-    private const val remotePeopleUrl = PlayerListLinks.githubCosmeticsDataUrl
+    private const val remotePeopleUrl = PlayerListLinks.skylistCosmeticsDataUrl
     private val fallbackTrollButtonMessages = listOf("Don't Press me")
     private val httpClient: HttpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(5))

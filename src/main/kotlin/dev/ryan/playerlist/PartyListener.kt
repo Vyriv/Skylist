@@ -1,14 +1,14 @@
 package dev.ryan.playerlist
 
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
-import net.minecraft.client.MinecraftClient
-import net.minecraft.text.Text
-import net.minecraft.util.Formatting
+import net.minecraft.client.Minecraft
+import net.minecraft.network.chat.Component
+import net.minecraft.ChatFormatting
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 class PartyListener(
-    private val client: MinecraftClient,
+    private val client: Minecraft,
 ) {
     private companion object {
         private const val duplicateMessageWindowMillis = 250L
@@ -240,8 +240,8 @@ class PartyListener(
     }
 
     private fun buildScammerHitMessage(result: ScammerCheckService.CheckResult): Text {
-        val usernameText = Text.literal(result.username).styled { style ->
-            val color = result.severityColor ?: Formatting.RED.colorValue ?: 0xFF5555
+        val usernameText = Component.literal(result.username).styled { style ->
+            val color = result.severityColor ?: ChatFormatting.RED.colorValue ?: 0xFF5555
             style.withColor(color and 0xFFFFFF)
         }
         val prefix = when (result.recommendedAction) {
@@ -252,12 +252,12 @@ class PartyListener(
             ScammerListManager.ScammerRecommendedAction.NONE -> "[SL] "
         }
         val scoreSuffix = result.severityResult?.score?.let { " (${result.severity?.label ?: "Unknown"} ${formatScore(it)})" }.orEmpty()
-        return Text.empty()
-            .append(Text.literal(prefix).formatted(Formatting.AQUA))
+        return Component.empty()
+            .append(Component.literal(prefix).formatted(ChatFormatting.AQUA))
             .append(usernameText)
-            .append(Text.literal(" is on the ${result.sourceLabel} list for ").formatted(Formatting.RED))
-            .append(Text.literal("\"${result.reason}\"").formatted(Formatting.GRAY))
-            .append(Text.literal(scoreSuffix).formatted(Formatting.YELLOW))
+            .append(Component.literal(" is on the ${result.sourceLabel} list for ").formatted(ChatFormatting.RED))
+            .append(Component.literal("\"${result.reason}\"").formatted(ChatFormatting.GRAY))
+            .append(Component.literal(scoreSuffix).formatted(ChatFormatting.YELLOW))
     }
 
     private fun shouldWarn(result: ScammerCheckService.CheckResult): Boolean {

@@ -1,16 +1,16 @@
 package dev.ryan.playerlist
 
-import net.minecraft.client.gui.Click
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.gui.screen.Screen
-import net.minecraft.client.gui.widget.ButtonWidget
-import net.minecraft.client.gui.widget.TextFieldWidget
-import net.minecraft.text.Text
-import net.minecraft.util.Formatting
+import net.minecraft.client.input.MouseButtonEvent
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.screens.Screen
+import net.minecraft.client.gui.components.Button
+import net.minecraft.client.gui.components.EditBox
+import net.minecraft.network.chat.Component
+import net.minecraft.ChatFormatting
 import kotlin.math.abs
 import kotlin.math.max
 
-class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("Scammer Settings")) {
+class ScammerSettingsScreen(private val parent: Screen) : Screen(Component.literal("Scammer Settings")) {
     private val severityOptions = ScammerListManager.ScammerSeverity.entries.toList()
     private val storageOptions = listOf(
         StorageOption("Off", ConfigManager.scammerStorageDisabledValue, "Don't save"),
@@ -22,15 +22,15 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
         StorageOption("Perm", null, "Permanent"),
     )
 
-    private var remoteChecksButton: ButtonWidget? = null
-    private var autoPartyButton: ButtonWidget? = null
-    private var warningThresholdButton: ButtonWidget? = null
-    private var autokickThresholdButton: ButtonWidget? = null
-    private var autokickButton: ButtonWidget? = null
-    private var announceButton: ButtonWidget? = null
-    private var tradePopupButton: ButtonWidget? = null
-    private var logOnlyThresholdField: TextFieldWidget? = null
-    private var doneButton: ButtonWidget? = null
+    private var remoteChecksButton: Button? = null
+    private var autoPartyButton: Button? = null
+    private var warningThresholdButton: Button? = null
+    private var autokickThresholdButton: Button? = null
+    private var autokickButton: Button? = null
+    private var announceButton: Button? = null
+    private var tradePopupButton: Button? = null
+    private var logOnlyThresholdField: EditBox? = null
+    private var doneButton: Button? = null
     private var leftMouseDown = false
     private var activeDropdown: DropdownMenu? = null
     private var draggingStorageSlider = false
@@ -55,18 +55,18 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
             }
         }
 
-        logOnlyThresholdField = TextFieldWidget(
-            textRenderer,
+        logOnlyThresholdField = EditBox(
+            font,
             metrics.logOnlyValueRect.left + 6,
             metrics.logOnlyValueRect.top + 4,
             metrics.logOnlyValueRect.width() - 12,
             12,
-            Text.literal("Log-only threshold"),
+            Component.literal("Log-only threshold"),
         ).also {
             it.setDrawsBackground(false)
             it.setMaxLength(8)
             it.text = formatDecimal(ConfigManager.getScammerLogOnlyThreshold())
-            addDrawableChild(it)
+            addRenderableWidget(it)
         }
 
         warningThresholdButton = dropdownButton(metrics.warningThresholdValueRect) {
@@ -101,33 +101,33 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
             }
         }
 
-        doneButton = ThemedButtonWidget.builder(Text.literal("Done")) {
+        doneButton = ThemedButtonWidget.builder(Component.literal("Done")) {
             persistFields()
-            close()
+            onClose()
         }.dimensions(
             panel.centerX() - 80,
             metrics.doneButtonY,
             160,
             18,
-        ).build().also { addDrawableChild(it) }
+        ).build().also { addRenderableWidget(it) }
 
         updateLabels()
     }
 
-    override fun shouldPause(): Boolean = false
+    override fun isPauseScreen(): Boolean = false
 
-    override fun close() {
+    override fun onClose() {
         persistFields()
-        client?.setScreen(parent)
+        minecraft.setScreen(parent)
     }
 
-    override fun render(context: DrawContext, mouseX: Int, mouseY: Int, deltaTicks: Float) {
+    override fun extractRenderState(context: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, deltaTicks: Float) {
         val theme = ThemeManager.current()
         val panel = panelRect()
         val metrics = metrics(panel)
         context.fill(0, 0, width, height, theme.overlayBackground)
         ThemeRenderer.drawPanel(context, panel.left, panel.top, panel.right, panel.bottom, 22, theme)
-        ThemeRenderer.drawCenteredText(context, textRenderer, title.string, panel.centerX(), panel.top + 8, theme.lightTextAccent)
+        ThemeRenderer.drawCenteredText(context, font, title.string, panel.centerX(), panel.top + 8, theme.lightTextAccent)
 
         drawSection(context, "Detection", metrics.leftColumn.left, metrics.detectionHeaderY, metrics.columnWidth, theme)
         drawRow(context, metrics.leftColumn.left, metrics.detectionFirstRowY, metrics.columnWidth, "Enable remote scammer checks", null, theme)
@@ -178,7 +178,7 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
         drawRow(context, metrics.rightColumn.left, metrics.actionsFirstRowY + metrics.rowPitch, metrics.columnWidth, "Announce scammers in p chat", null, theme)
         drawRow(context, metrics.rightColumn.left, metrics.actionsFirstRowY + metrics.rowPitch * 2, metrics.columnWidth, "Trade scammer pop-up", null, theme)
 
-        super.render(context, mouseX, mouseY, deltaTicks)
+        super.extractRenderState(context, mouseX, mouseY, deltaTicks)
 
         drawValueBox(context, metrics.remoteChecksValueRect, remoteChecksButton, theme, remoteChecksButton?.message?.string.orEmpty(), semanticToggleColor(ConfigManager.isRemoteScammerChecksEnabled(), theme), true, mouseX.toDouble(), mouseY.toDouble())
         drawValueBox(context, metrics.autoPartyValueRect, autoPartyButton, theme, autoPartyButton?.message?.string.orEmpty(), semanticToggleColor(ConfigManager.isAutoCheckPartyMembersEnabled(), theme), true, mouseX.toDouble(), mouseY.toDouble())
@@ -200,14 +200,14 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
         }
 
         hoveredTooltip(metrics, mouseX.toDouble(), mouseY.toDouble())?.let {
-            context.drawTooltip(textRenderer, Text.literal(it), mouseX, mouseY)
+            context.setTooltipForNextFrame(font, Component.literal(it), mouseX, mouseY)
         }
         if (metrics.storageValueRect.contains(mouseX.toDouble(), mouseY.toDouble())) {
-            context.drawTooltip(textRenderer, Text.literal("Storage: ${storageOptions[storageOptionIndex].description}"), mouseX, mouseY)
+            context.setTooltipForNextFrame(font, Component.literal("Storage: ${storageOptions[storageOptionIndex].description}"), mouseX, mouseY)
         }
     }
 
-    override fun mouseClicked(click: Click, doubled: Boolean): Boolean {
+    override fun mouseClicked(click: MouseButtonEvent, doubled: Boolean): Boolean {
         val mouseX = click.x()
         val mouseY = click.y()
         val metrics = metrics(panelRect())
@@ -227,7 +227,7 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
         return super.mouseClicked(click, doubled)
     }
 
-    override fun mouseReleased(click: Click): Boolean {
+    override fun mouseReleased(click: MouseButtonEvent): Boolean {
         if (click.button() == 0) {
             leftMouseDown = false
             draggingStorageSlider = false
@@ -235,12 +235,12 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
         return super.mouseReleased(click)
     }
 
-    private fun drawSection(context: DrawContext, title: String, x: Int, y: Int, width: Int, theme: ThemePalette) {
-        ThemeRenderer.drawText(context, textRenderer, title, x, y, theme.primaryAccent)
+    private fun drawSection(context: GuiGraphicsExtractor, title: String, x: Int, y: Int, width: Int, theme: ThemePalette) {
+        ThemeRenderer.drawText(context, font, title, x, y, theme.primaryAccent)
     }
 
     private fun drawRow(
-        context: DrawContext,
+        context: GuiGraphicsExtractor,
         x: Int,
         y: Int,
         width: Int,
@@ -252,16 +252,16 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
         ThemeRenderer.drawOutline(context, x, y, width, ROW_HEIGHT, theme.idleBorder)
 
         val clippedLabel = ellipsize(label, LABEL_MAX_WIDTH)
-        ThemeRenderer.drawText(context, textRenderer, clippedLabel, x + 8, y + 8, theme.lightTextAccent)
+        ThemeRenderer.drawText(context, font, clippedLabel, x + 8, y + 8, theme.lightTextAccent)
 
         tooltipText?.let {
             val rect = tooltipRect(x, y, clippedLabel)
-            ThemeRenderer.drawText(context, textRenderer, "?", rect.left, rect.top, theme.subtleText)
+            ThemeRenderer.drawText(context, font, "?", rect.left, rect.top, theme.subtleText)
         }
     }
 
     private fun drawStorageSlider(
-        context: DrawContext,
+        context: GuiGraphicsExtractor,
         rect: Rect,
         theme: ThemePalette,
         mouseX: Double,
@@ -277,8 +277,8 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
         ThemeRenderer.drawOutline(context, rect.left, rect.top, rect.width(), rect.height(), border)
 
         val option = storageOptions[storageOptionIndex]
-        val labelWidth = textRenderer.getWidth(option.label)
-        ThemeRenderer.drawText(context, textRenderer, option.label, rect.left + (rect.width() - labelWidth) / 2, rect.top + 2, theme.lightTextAccent)
+        val labelWidth = font.getWidth(option.label)
+        ThemeRenderer.drawText(context, font, option.label, rect.left + (rect.width() - labelWidth) / 2, rect.top + 2, theme.lightTextAccent)
 
         val trackLeft = rect.left + 6
         val trackRight = rect.right - 6
@@ -293,9 +293,9 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
     }
 
     private fun drawTextFieldBox(
-        context: DrawContext,
+        context: GuiGraphicsExtractor,
         rect: Rect,
-        field: TextFieldWidget?,
+        field: EditBox?,
         theme: ThemePalette,
         placeholder: String,
         textColor: Int = 0xFFFFFFFF.toInt(),
@@ -308,7 +308,7 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
         }
         ThemeRenderer.drawText(
             context,
-            textRenderer,
+            font,
             placeholder,
             rect.left + 6,
             rect.top + 5,
@@ -317,9 +317,9 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
     }
 
     private fun drawValueBox(
-        context: DrawContext,
+        context: GuiGraphicsExtractor,
         rect: Rect,
-        widget: ButtonWidget?,
+        widget: Button?,
         theme: ThemePalette,
         rawValue: String,
         textColor: Int,
@@ -339,16 +339,16 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
         ThemeRenderer.drawOutline(context, rect.left, rect.top, rect.width(), rect.height(), border)
 
         val value = rawValue.removeSuffix(" v")
-        val valueWidth = textRenderer.getWidth(value)
+        val valueWidth = font.getWidth(value)
         val valueX = rect.left + (rect.width() - valueWidth) / 2 - if (drawArrow) 4 else 0
-        ThemeRenderer.drawText(context, textRenderer, value, valueX, rect.top + 5, textColor)
+        ThemeRenderer.drawText(context, font, value, valueX, rect.top + 5, textColor)
         if (drawArrow) {
-            ThemeRenderer.drawText(context, textRenderer, "v", rect.right - 8, rect.top + 5, theme.mutedText)
+            ThemeRenderer.drawText(context, font, "v", rect.right - 8, rect.top + 5, theme.mutedText)
         }
     }
 
     private fun drawDropdown(
-        context: DrawContext,
+        context: GuiGraphicsExtractor,
         dropdown: DropdownMenu,
         theme: ThemePalette,
         mouseX: Double,
@@ -360,8 +360,8 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
             val row = dropdown.optionRect(index)
             val hovered = row.contains(mouseX, mouseY)
             context.fill(row.left, row.top, row.right, row.bottom, if (hovered) theme.secondaryPanel else theme.fieldBackground)
-            val textWidth = textRenderer.getWidth(option.label)
-            ThemeRenderer.drawText(context, textRenderer, option.label, row.left + (row.width() - textWidth) / 2, row.top + 5, option.color)
+            val textWidth = font.getWidth(option.label)
+            ThemeRenderer.drawText(context, font, option.label, row.left + (row.width() - textWidth) / 2, row.top + 5, option.color)
         }
     }
 
@@ -377,26 +377,26 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
     )
 
     private fun tooltipRect(x: Int, y: Int, renderedLabel: String): Rect {
-        val labelWidth = textRenderer.getWidth(renderedLabel)
+        val labelWidth = font.getWidth(renderedLabel)
         val left = x + 8 + labelWidth + 4
         val top = y + (ROW_HEIGHT / 2) - 4
         return Rect(left, top, left + 7, top + 8)
     }
 
-    private fun dropdownButton(rect: Rect, action: () -> Unit): ButtonWidget =
-        ThemedButtonWidget.builder(Text.literal("")) { action() }
+    private fun dropdownButton(rect: Rect, action: () -> Unit): Button =
+        ThemedButtonWidget.builder(Component.literal("")) { action() }
             .dimensions(rect.left, rect.top, rect.width(), rect.height())
             .build()
-            .also { addDrawableChild(it) }
+            .also { addRenderableWidget(it) }
 
     private fun updateLabels() {
-        remoteChecksButton?.message = Text.literal(onOff(ConfigManager.isRemoteScammerChecksEnabled()))
-        autoPartyButton?.message = Text.literal(onOff(ConfigManager.isAutoCheckPartyMembersEnabled()))
-        warningThresholdButton?.message = Text.literal(ConfigManager.getScammerWarningThreshold().label)
-        autokickThresholdButton?.message = Text.literal(ConfigManager.getScammerAutokickThreshold().label)
-        autokickButton?.message = Text.literal(onOff(ConfigManager.isScammerAutokickEnabled()))
-        announceButton?.message = Text.literal(onOff(ConfigManager.isAnnounceScammerHitsEnabled()))
-        tradePopupButton?.message = Text.literal(onOff(ConfigManager.isTradeScammerPopupEnabled()))
+        remoteChecksButton?.message = Component.literal(onOff(ConfigManager.isRemoteScammerChecksEnabled()))
+        autoPartyButton?.message = Component.literal(onOff(ConfigManager.isAutoCheckPartyMembersEnabled()))
+        warningThresholdButton?.message = Component.literal(ConfigManager.getScammerWarningThreshold().label)
+        autokickThresholdButton?.message = Component.literal(ConfigManager.getScammerAutokickThreshold().label)
+        autokickButton?.message = Component.literal(onOff(ConfigManager.isScammerAutokickEnabled()))
+        announceButton?.message = Component.literal(onOff(ConfigManager.isAnnounceScammerHitsEnabled()))
+        tradePopupButton?.message = Component.literal(onOff(ConfigManager.isTradeScammerPopupEnabled()))
     }
 
     private fun persistFields() {
@@ -411,11 +411,11 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
         if (value % 1.0 == 0.0) value.toLong().toString() else String.format("%.2f", value).trimEnd('0').trimEnd('.')
 
     private fun ellipsize(text: String, maxWidth: Int): String {
-        if (textRenderer.getWidth(text) <= maxWidth) {
+        if (font.getWidth(text) <= maxWidth) {
             return text
         }
         var output = text
-        while (output.isNotEmpty() && textRenderer.getWidth("$output...") > maxWidth) {
+        while (output.isNotEmpty() && font.getWidth("$output...") > maxWidth) {
             output = output.dropLast(1)
         }
         return if (output.isEmpty()) text.take(1) else "$output..."
@@ -455,7 +455,7 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
     }
 
     private fun buildDropdown(anchor: Rect, options: List<DropdownOption>): DropdownMenu {
-        val menuWidth = max(anchor.width(), options.maxOf { textRenderer.getWidth(it.label) } + 16)
+        val menuWidth = max(anchor.width(), options.maxOf { font.getWidth(it.label) } + 16)
         val panel = panelRect()
         val left = minOf(max(anchor.left, panel.left + 12), panel.right - 12 - menuWidth)
         val top = anchor.bottom + 2
@@ -633,13 +633,13 @@ class ScammerSettingsScreen(private val parent: Screen) : Screen(Text.literal("S
     }
 
     private fun semanticToggleColor(enabled: Boolean, theme: ThemePalette): Int =
-        (if (enabled) Formatting.GREEN.colorValue else Formatting.RED.colorValue) ?: theme.lightTextAccent
+        (if (enabled) ChatFormatting.GREEN.colorValue else ChatFormatting.RED.colorValue) ?: theme.lightTextAccent
 
     private fun semanticSeverityColor(severity: ScammerListManager.ScammerSeverity, theme: ThemePalette): Int =
         when (severity) {
-            ScammerListManager.ScammerSeverity.CRITICAL -> Formatting.RED.colorValue ?: theme.lightTextAccent
-            ScammerListManager.ScammerSeverity.HIGH -> Formatting.GOLD.colorValue ?: theme.lightTextAccent
-            ScammerListManager.ScammerSeverity.MEDIUM -> Formatting.YELLOW.colorValue ?: theme.lightTextAccent
+            ScammerListManager.ScammerSeverity.CRITICAL -> ChatFormatting.RED.colorValue ?: theme.lightTextAccent
+            ScammerListManager.ScammerSeverity.HIGH -> ChatFormatting.GOLD.colorValue ?: theme.lightTextAccent
+            ScammerListManager.ScammerSeverity.MEDIUM -> ChatFormatting.YELLOW.colorValue ?: theme.lightTextAccent
             ScammerListManager.ScammerSeverity.LOW -> theme.mutedText
         }
 

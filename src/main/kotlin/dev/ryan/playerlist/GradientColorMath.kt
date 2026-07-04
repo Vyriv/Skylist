@@ -1,6 +1,6 @@
 package dev.ryan.playerlist
 
-import net.minecraft.util.Formatting
+import net.minecraft.ChatFormatting
 
 internal const val LEGACY_MINECRAFT_FORMAT_CODE: Char = '§'
 
@@ -38,22 +38,22 @@ internal object GradientColorMath {
 
     fun toLegacyColorCode(color: Int): String {
         val matchingFormatting = listOf(
-            Formatting.BLACK,
-            Formatting.DARK_BLUE,
-            Formatting.DARK_GREEN,
-            Formatting.DARK_AQUA,
-            Formatting.DARK_RED,
-            Formatting.DARK_PURPLE,
-            Formatting.GOLD,
-            Formatting.GRAY,
-            Formatting.DARK_GRAY,
-            Formatting.BLUE,
-            Formatting.GREEN,
-            Formatting.AQUA,
-            Formatting.RED,
-            Formatting.LIGHT_PURPLE,
-            Formatting.YELLOW,
-            Formatting.WHITE,
+            ChatFormatting.BLACK,
+            ChatFormatting.DARK_BLUE,
+            ChatFormatting.DARK_GREEN,
+            ChatFormatting.DARK_AQUA,
+            ChatFormatting.DARK_RED,
+            ChatFormatting.DARK_PURPLE,
+            ChatFormatting.GOLD,
+            ChatFormatting.GRAY,
+            ChatFormatting.DARK_GRAY,
+            ChatFormatting.BLUE,
+            ChatFormatting.GREEN,
+            ChatFormatting.AQUA,
+            ChatFormatting.RED,
+            ChatFormatting.LIGHT_PURPLE,
+            ChatFormatting.YELLOW,
+            ChatFormatting.WHITE,
         ).firstOrNull { it.colorValue == color }
 
         return if (matchingFormatting != null) {

@@ -3,12 +3,12 @@ package dev.ryan.playerlist
 import com.google.gson.JsonParser
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
-import net.minecraft.client.MinecraftClient
-import net.minecraft.text.ClickEvent
-import net.minecraft.text.HoverEvent
-import net.minecraft.text.MutableText
-import net.minecraft.text.Text
-import net.minecraft.util.Formatting
+import net.minecraft.client.Minecraft
+import net.minecraft.network.chat.ClickEvent
+import net.minecraft.network.chat.HoverEvent
+import net.minecraft.network.chat.MutableComponent
+import net.minecraft.network.chat.Component
+import net.minecraft.ChatFormatting
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -61,8 +61,8 @@ object GitHubUpdateChecker {
                     if (compareVersions(RuntimeVersion.featureVersion(), update.releaseTag) >= 0) {
                         source.sendFeedback(
                             tlMessage(
-                                Text.literal("You already have the latest version installed.")
-                                    .formatted(Formatting.GREEN),
+                                Component.literal("You already have the latest version installed.")
+                                    .formatted(ChatFormatting.GREEN),
                             ),
                         )
                         return@execute
@@ -80,9 +80,9 @@ object GitHubUpdateChecker {
     }
 
     private fun onJoin(
-        handler: net.minecraft.client.network.ClientPlayNetworkHandler,
+        handler: net.minecraft.client.multiplayer.ClientPacketListener,
         sender: net.fabricmc.fabric.api.networking.v1.PacketSender,
-        client: MinecraftClient,
+        client: Minecraft,
     ) {
         val now = System.currentTimeMillis()
         val cached = cachedUpdate
@@ -103,7 +103,7 @@ object GitHubUpdateChecker {
             }
     }
 
-    private fun notifyIfOutdated(client: MinecraftClient, update: UpdateInfo) {
+    private fun notifyIfOutdated(client: Minecraft, update: UpdateInfo) {
         if (hasNotifiedThisSession) {
             return
         }
@@ -220,48 +220,48 @@ object GitHubUpdateChecker {
         currentVersion: String,
         latestVersion: String,
         releaseUrl: String,
-    ): MutableText =
-        Text.empty()
-            .append(Text.literal("[SL] ").formatted(Formatting.AQUA))
-            .append(Text.literal("New version available. ").formatted(Formatting.GREEN))
-            .append(Text.literal("Current: ").formatted(Formatting.GREEN))
-            .append(Text.literal(currentVersion).formatted(Formatting.YELLOW))
-            .append(Text.literal(" Latest: ").formatted(Formatting.GREEN))
-            .append(Text.literal(latestVersion).formatted(Formatting.YELLOW))
-            .append(Text.literal(" "))
+    ): MutableComponent =
+        Component.empty()
+            .append(Component.literal("[SL] ").formatted(ChatFormatting.AQUA))
+            .append(Component.literal("New version available. ").formatted(ChatFormatting.GREEN))
+            .append(Component.literal("Current: ").formatted(ChatFormatting.GREEN))
+            .append(Component.literal(currentVersion).formatted(ChatFormatting.YELLOW))
+            .append(Component.literal(" Latest: ").formatted(ChatFormatting.GREEN))
+            .append(Component.literal(latestVersion).formatted(ChatFormatting.YELLOW))
+            .append(Component.literal(" "))
             .append(releasePageButton(releaseUrl))
 
     private fun buildManualUpdateMessage(
         currentVersion: String,
         latestVersion: String,
         releaseUrl: String,
-    ): MutableText =
-        Text.empty()
-            .append(Text.literal("[SL] ").formatted(Formatting.AQUA))
-            .append(Text.literal("Skylist update available. ").formatted(Formatting.GREEN))
-            .append(Text.literal("Current: ").formatted(Formatting.GREEN))
-            .append(Text.literal(currentVersion).formatted(Formatting.YELLOW))
-            .append(Text.literal(" Latest: ").formatted(Formatting.GREEN))
-            .append(Text.literal(latestVersion).formatted(Formatting.YELLOW))
-            .append(Text.literal(" "))
+    ): MutableComponent =
+        Component.empty()
+            .append(Component.literal("[SL] ").formatted(ChatFormatting.AQUA))
+            .append(Component.literal("Skylist update available. ").formatted(ChatFormatting.GREEN))
+            .append(Component.literal("Current: ").formatted(ChatFormatting.GREEN))
+            .append(Component.literal(currentVersion).formatted(ChatFormatting.YELLOW))
+            .append(Component.literal(" Latest: ").formatted(ChatFormatting.GREEN))
+            .append(Component.literal(latestVersion).formatted(ChatFormatting.YELLOW))
+            .append(Component.literal(" "))
             .append(releasePageButton(releaseUrl))
 
-    private fun releasePageButton(releaseUrl: String): MutableText =
-        Text.literal("[Open Release Page]")
-            .formatted(Formatting.AQUA, Formatting.UNDERLINE)
+    private fun releasePageButton(releaseUrl: String): MutableComponent =
+        Component.literal("[Open Release Page]")
+            .formatted(ChatFormatting.AQUA, ChatFormatting.UNDERLINE)
             .styled {
                 it.withClickEvent(ClickEvent.OpenUrl(URI.create(releaseUrl)))
-                    .withHoverEvent(HoverEvent.ShowText(Text.literal("Open the official Skylist release page in your browser")))
+                    .withHoverEvent(HoverEvent.ShowText(Component.literal("Open the official Skylist release page in your browser")))
             }
 
-    private fun tlMessage(message: String): MutableText =
-        Text.empty()
-            .append(Text.literal("[SL] ").formatted(Formatting.AQUA))
-            .append(Text.literal(message))
+    private fun tlMessage(message: String): MutableComponent =
+        Component.empty()
+            .append(Component.literal("[SL] ").formatted(ChatFormatting.AQUA))
+            .append(Component.literal(message))
 
-    private fun tlMessage(message: Text): MutableText =
-        Text.empty()
-            .append(Text.literal("[SL] ").formatted(Formatting.AQUA))
+    private fun tlMessage(message: Text): MutableComponent =
+        Component.empty()
+            .append(Component.literal("[SL] ").formatted(ChatFormatting.AQUA))
             .append(message)
 
     private data class UpdateInfo(

@@ -1,7 +1,7 @@
 package dev.ryan.playerlist.integration;
 
 import dev.ryan.playerlist.NameStyler;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 
 import java.awt.Color;
 import java.lang.reflect.Constructor;
@@ -31,13 +31,13 @@ public final class SkyHanniRenderableAdapter {
             // direct and readable. This helper only calls public getter methods and then
             // reconstructs a public renderable instance with styled text.
             Method getTextMethod = renderableClass.getMethod("getText");
-            Object rawText = getTextMethod.invoke(renderable);
-            if (!(rawText instanceof String) && !(rawText instanceof Text)) {
+            Object rawComponent = getTextMethod.invoke(renderable);
+            if (!(rawComponent instanceof String) && !(rawComponent instanceof Component)) {
                 return null;
             }
 
-            Text styledText = styleRenderableText(rawText);
-            if (styledText == null) {
+            Component styledComponent = styleRenderableText(rawComponent);
+            if (styledComponent == null) {
                 return null;
             }
 
@@ -51,13 +51,13 @@ public final class SkyHanniRenderableAdapter {
             Object horizontalAlign = getHorizontalAlignMethod.invoke(renderable);
             Object verticalAlign = getVerticalAlignMethod.invoke(renderable);
 
-            return constructTextRenderable(styledText, scale, color, horizontalAlign, verticalAlign);
+            return constructTextRenderable(styledComponent, scale, color, horizontalAlign, verticalAlign);
         } catch (ReflectiveOperationException ignored) {
             return null;
         }
     }
 
-    private static Text styleRenderableText(Object rawText) {
+    private static Component styleRenderableText(Object rawText) {
         if (rawText instanceof String text) {
             String styledString = NameStyler.INSTANCE.applyScoreboardDisplayDecorationsToString(text);
             if (styledString == text) {
@@ -66,13 +66,13 @@ public final class SkyHanniRenderableAdapter {
             return NameStyler.INSTANCE.applyScoreboardDisplayDecorations(styledString);
         }
 
-        Text text = (Text) rawText;
-        Text styledText = NameStyler.INSTANCE.applyScoreboardDisplayDecorations(text);
-        return styledText == text ? null : styledText;
+        Component text = (Component) rawText;
+        Component styledComponent = NameStyler.INSTANCE.applyScoreboardDisplayDecorations(text);
+        return styledComponent == text ? null : styledComponent;
     }
 
     private static Object constructTextRenderable(
-            Text styledText,
+            Component styledText,
             double scale,
             Color color,
             Object horizontalAlign,

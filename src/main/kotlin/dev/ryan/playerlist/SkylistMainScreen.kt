@@ -1,11 +1,11 @@
 package dev.ryan.playerlist
 
-import net.minecraft.client.gui.Click
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.gui.screen.Screen
-import net.minecraft.client.gui.widget.ButtonWidget
-import net.minecraft.client.gui.widget.TextFieldWidget
-import net.minecraft.text.Text
+import net.minecraft.client.input.MouseButtonEvent
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.screens.Screen
+import net.minecraft.client.gui.components.Button
+import net.minecraft.client.gui.components.EditBox
+import net.minecraft.network.chat.Component
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -13,7 +13,7 @@ import java.util.concurrent.CompletableFuture
 
 class SkylistMainScreen(
     initialSearch: String = "",
-) : Screen(Text.literal("Skylist")) {
+) : Screen(Component.literal("Skylist")) {
     private companion object {
         const val MAX_FRAME_WIDTH = 492
         const val MAX_FRAME_HEIGHT = 324
@@ -68,12 +68,12 @@ class SkylistMainScreen(
     )
 
     private val timestampFormatter = DateTimeFormatter.ofPattern("HH:mm:ss dd/MM/yy")
-    private var searchField: TextFieldWidget? = null
-    private var refreshButton: ButtonWidget? = null
-    private var settingsButton: ButtonWidget? = null
-    private var checkButton: ButtonWidget? = null
-    private var removeCachedButton: ButtonWidget? = null
-    private var doneButton: ButtonWidget? = null
+    private var searchField: EditBox? = null
+    private var refreshButton: Button? = null
+    private var settingsButton: Button? = null
+    private var checkButton: Button? = null
+    private var removeCachedButton: Button? = null
+    private var doneButton: Button? = null
     private var leftMouseDown = false
     private var searchQuery = initialSearch
     private var allEntries = emptyList<ScammerListManager.ScammerEntry>()
@@ -89,13 +89,13 @@ class SkylistMainScreen(
         val layout = footerButtonLayout()
         val search = searchRect()
 
-        searchField = TextFieldWidget(
-            textRenderer,
+        searchField = EditBox(
+            font,
             search.left,
             search.top,
             search.width(),
             search.height(),
-            Text.literal("Search scammers..."),
+            Component.literal("Search scammers..."),
         ).also {
             it.setDrawsBackground(false)
             it.setMaxLength(64)
@@ -105,7 +105,7 @@ class SkylistMainScreen(
                 searchQuery = value
                 refreshEntries(keepSelection = true)
             }
-            addDrawableChild(it)
+            addRenderableWidget(it)
             setInitialFocus(it)
         }
 
@@ -117,7 +117,7 @@ class SkylistMainScreen(
             val cosmeticsRefresh = SkylistBaseCommandHandler.refreshCosmetics()
 
             CompletableFuture.allOf(scammerRefresh, cosmeticsRefresh).whenComplete { _, throwable ->
-                client?.execute {
+                minecraft.execute {
                     refreshing = false
                     if (throwable != null) {
                         statusMessage = when {
@@ -139,11 +139,11 @@ class SkylistMainScreen(
         }
 
         settingsButton = themedButton("Settings", layout.settingsX, layout.buttonTop, layout.secondaryWidth) {
-            client?.setScreen(SkylistBaseSettingsScreen(this))
+            minecraft.setScreen(SkylistBaseSettingsScreen(this))
         }
 
         checkButton = themedButton("Check", layout.checkX, layout.buttonTop, layout.secondaryWidth) {
-            client?.setScreen(ScammerCheckLookupScreen(this, selectedEntry()?.username.orEmpty()))
+            minecraft.setScreen(ScammerCheckLookupScreen(this, selectedEntry()?.username.orEmpty()))
         }
 
         removeCachedButton = themedButton("Remove", layout.removeX, layout.buttonTop, REMOVE_BUTTON_WIDTH) {
@@ -156,20 +156,20 @@ class SkylistMainScreen(
         }
 
         doneButton = themedButton("Done", layout.doneX, layout.buttonTop, DONE_BUTTON_WIDTH) {
-            close()
+            onClose()
         }
 
         refreshEntries(keepSelection = false)
         updateButtons()
     }
 
-    override fun shouldPause(): Boolean = false
+    override fun isPauseScreen(): Boolean = false
 
-    override fun close() {
-        client?.setScreen(null)
+    override fun onClose() {
+        minecraft.setScreen(null)
     }
 
-    override fun render(context: DrawContext, mouseX: Int, mouseY: Int, deltaTicks: Float) {
+    override fun extractRenderState(context: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, deltaTicks: Float) {
         val theme = ThemeManager.current()
         val frame = frameRect()
         val listPanel = listPanelRect()
@@ -198,12 +198,12 @@ class SkylistMainScreen(
         drawDetails(context, detail, theme)
         drawFooterStatus(context, footer, theme)
 
-        super.render(context, mouseX, mouseY, deltaTicks)
+        super.extractRenderState(context, mouseX, mouseY, deltaTicks)
         listOfNotNull(refreshButton, settingsButton, checkButton, removeCachedButton, doneButton)
             .forEach { ThemeRenderer.drawButton(context, it, mouseX.toDouble(), mouseY.toDouble(), leftMouseDown, theme) }
     }
 
-    override fun mouseClicked(click: Click, doubled: Boolean): Boolean {
+    override fun mouseClicked(click: MouseButtonEvent, doubled: Boolean): Boolean {
         if (click.button() == 0) {
             leftMouseDown = true
         }
@@ -216,7 +216,7 @@ class SkylistMainScreen(
             selectedUuid = entry.uuid
             statusMessage = null
             if (doubled) {
-                client?.setScreen(ScammerCheckLookupScreen(this, entry.username))
+                minecraft.setScreen(ScammerCheckLookupScreen(this, entry.username))
             }
             updateButtons()
             return true
@@ -225,7 +225,7 @@ class SkylistMainScreen(
         return super.mouseClicked(click, doubled)
     }
 
-    override fun mouseReleased(click: Click): Boolean {
+    override fun mouseReleased(click: MouseButtonEvent): Boolean {
         if (click.button() == 0) {
             leftMouseDown = false
         }
@@ -293,13 +293,13 @@ class SkylistMainScreen(
         refreshButton?.active = !refreshing
     }
 
-    private fun themedButton(label: String, x: Int, y: Int, width: Int, onPress: () -> Unit): ButtonWidget =
-        ThemedButtonWidget.builder(Text.literal(label)) { onPress() }
+    private fun themedButton(label: String, x: Int, y: Int, width: Int, onPress: () -> Unit): Button =
+        ThemedButtonWidget.builder(Component.literal(label)) { onPress() }
             .dimensions(x, y, width, BUTTON_HEIGHT)
             .build()
-            .also { addDrawableChild(it) }
+            .also { addRenderableWidget(it) }
 
-    private fun drawEntries(context: DrawContext, mouseX: Double, mouseY: Double, list: Rect, theme: ThemePalette) {
+    private fun drawEntries(context: GuiGraphicsExtractor, mouseX: Double, mouseY: Double, list: Rect, theme: ThemePalette) {
         if (filteredEntries.isEmpty()) {
             drawCentered(context, "No scammer entries match your search.", list.centerX(), list.top + 18, theme.subtleText)
             return
@@ -320,20 +320,20 @@ class SkylistMainScreen(
             val contentLeft = row.left + ROW_HORIZONTAL_PADDING
             val contentRight = row.right - ROW_HORIZONTAL_PADDING
             val severity = "${entry.severityLevel.label} ${formatScore(entry.severityResult.score)}"
-            val severityWidth = textRenderer.getWidth(severity)
+            val severityWidth = font.getWidth(severity)
             val severityX = contentRight - severityWidth
-            val lineTop = row.top + (row.height() - (textRenderer.fontHeight * 2 + ROW_TEXT_GAP)) / 2
+            val lineTop = row.top + (row.height() - (font.fontHeight * 2 + ROW_TEXT_GAP)) / 2
             val usernameWidth = (severityX - contentLeft - 8).coerceAtLeast(48)
             val previewWidth = (contentRight - contentLeft).coerceAtLeast(48)
             val previewColor = if (selected) theme.lightTextAccent else theme.subtleText
 
             drawText(context, ellipsizeToWidth(entry.username, usernameWidth), contentLeft, lineTop, 0xFFFFFFFF.toInt())
             drawText(context, severity, severityX, lineTop, entry.severityLevel.color)
-            drawText(context, ellipsizeToWidth(entry.reason, previewWidth), contentLeft, lineTop + textRenderer.fontHeight + ROW_TEXT_GAP, previewColor)
+            drawText(context, ellipsizeToWidth(entry.reason, previewWidth), contentLeft, lineTop + font.fontHeight + ROW_TEXT_GAP, previewColor)
         }
     }
 
-    private fun drawDetails(context: DrawContext, detail: Rect, theme: ThemePalette) {
+    private fun drawDetails(context: GuiGraphicsExtractor, detail: Rect, theme: ThemePalette) {
         val entry = selectedEntry()
         if (entry == null) {
             drawCentered(context, "Select a scammer entry to view details.", detail.centerX(), detail.top + 18, theme.subtleText)
@@ -346,8 +346,8 @@ class SkylistMainScreen(
         var y = detail.top + PANEL_PADDING
 
         drawText(context, ellipsizeToWidth(entry.username, (contentWidth - 70).coerceAtLeast(90)), contentLeft, y, 0xFFFFFFFF.toInt())
-        drawText(context, "${entry.severityLevel.label} ${formatScore(entry.severityResult.score)}", contentRight - textRenderer.getWidth("${entry.severityLevel.label} ${formatScore(entry.severityResult.score)}"), y, entry.severityLevel.color)
-        y += textRenderer.fontHeight + DETAIL_SECTION_GAP
+        drawText(context, "${entry.severityLevel.label} ${formatScore(entry.severityResult.score)}", contentRight - font.getWidth("${entry.severityLevel.label} ${formatScore(entry.severityResult.score)}"), y, entry.severityLevel.color)
+        y += font.fontHeight + DETAIL_SECTION_GAP
 
         y = drawWrappedBlock(context, "Score", "${formatScore(entry.severityResult.score)} (base ${entry.severityResult.baseScore} + recency ${formatScore(entry.severityResult.recencyBonus)})", contentLeft, y, contentWidth, theme, theme.lightTextAccent, detail.bottom - PANEL_PADDING)
         val action = entry.severityResult.recommendedAction.name.lowercase().replace('_', ' ')
@@ -372,7 +372,7 @@ class SkylistMainScreen(
     }
 
     private fun drawWrappedBlock(
-        context: DrawContext,
+        context: GuiGraphicsExtractor,
         label: String,
         value: String,
         x: Int,
@@ -382,12 +382,12 @@ class SkylistMainScreen(
         valueColor: Int,
         bottomLimit: Int,
     ): Int {
-        if (y > bottomLimit - textRenderer.fontHeight) {
+        if (y > bottomLimit - font.fontHeight) {
             return y
         }
 
         drawText(context, label, x, y, theme.hoverAccent)
-        val availableLines = ((bottomLimit - (y + textRenderer.fontHeight + DETAIL_LABEL_GAP)) / (textRenderer.fontHeight + DETAIL_LINE_GAP)).coerceAtLeast(1)
+        val availableLines = ((bottomLimit - (y + font.fontHeight + DETAIL_LABEL_GAP)) / (font.fontHeight + DETAIL_LINE_GAP)).coerceAtLeast(1)
         val wrappedLines = wrappedLines(value, width)
         val linesToDraw = if (wrappedLines.size > availableLines) {
             wrappedLines.take(availableLines).toMutableList().also { lines ->
@@ -397,15 +397,15 @@ class SkylistMainScreen(
             wrappedLines
         }
 
-        var currentY = y + textRenderer.fontHeight + DETAIL_LABEL_GAP
+        var currentY = y + font.fontHeight + DETAIL_LABEL_GAP
         linesToDraw.forEach { line ->
             drawText(context, line, x, currentY, valueColor)
-            currentY += textRenderer.fontHeight + DETAIL_LINE_GAP
+            currentY += font.fontHeight + DETAIL_LINE_GAP
         }
         return currentY + DETAIL_SECTION_GAP
     }
 
-    private fun drawFooterStatus(context: DrawContext, footer: Rect, theme: ThemePalette) {
+    private fun drawFooterStatus(context: GuiGraphicsExtractor, footer: Rect, theme: ThemePalette) {
         val status = statusMessage ?: "Loaded ${allEntries.size} scammer entr${if (allEntries.size == 1) "y" else "ies"}."
         drawText(
             context,
@@ -416,7 +416,7 @@ class SkylistMainScreen(
         )
     }
 
-    private fun drawSearchPlaceholder(context: DrawContext, theme: ThemePalette) {
+    private fun drawSearchPlaceholder(context: GuiGraphicsExtractor, theme: ThemePalette) {
         val field = searchField ?: return
         if (field.text.isNotEmpty() || field.isFocused) {
             return
@@ -447,7 +447,7 @@ class SkylistMainScreen(
 
             var currentLine = ""
             paragraph.split(' ').filter { it.isNotBlank() }.forEach { word ->
-                if (textRenderer.getWidth(word) > maxWidth) {
+                if (font.getWidth(word) > maxWidth) {
                     if (currentLine.isNotEmpty()) {
                         lines += currentLine
                         currentLine = ""
@@ -459,7 +459,7 @@ class SkylistMainScreen(
                 }
 
                 val candidate = if (currentLine.isEmpty()) word else "$currentLine $word"
-                if (textRenderer.getWidth(candidate) <= maxWidth) {
+                if (font.getWidth(candidate) <= maxWidth) {
                     currentLine = candidate
                 } else {
                     lines += currentLine
@@ -504,19 +504,19 @@ class SkylistMainScreen(
         if (value.isEmpty() || maxWidth <= 0) {
             return ""
         }
-        if (textRenderer.getWidth(value) <= maxWidth) {
+        if (font.getWidth(value) <= maxWidth) {
             return value
         }
 
         val ellipsis = "..."
-        if (textRenderer.getWidth(ellipsis) >= maxWidth) {
+        if (font.getWidth(ellipsis) >= maxWidth) {
             return ellipsis.take(1)
         }
 
         var result = value
         while (result.isNotEmpty()) {
             val candidate = result.trimEnd() + ellipsis
-            if (textRenderer.getWidth(candidate) <= maxWidth) {
+            if (font.getWidth(candidate) <= maxWidth) {
                 return candidate
             }
             result = result.dropLast(1)
@@ -533,7 +533,7 @@ class SkylistMainScreen(
         var current = ""
         value.forEach { char ->
             val candidate = current + char
-            if (current.isEmpty() || textRenderer.getWidth(candidate) <= maxWidth) {
+            if (current.isEmpty() || font.getWidth(candidate) <= maxWidth) {
                 current = candidate
             } else {
                 chunks += current
@@ -638,11 +638,11 @@ class SkylistMainScreen(
         )
     }
 
-    private fun drawCentered(context: DrawContext, text: String, centerX: Int, y: Int, color: Int) {
-        ThemeRenderer.drawCenteredTextWithShadow(context, textRenderer, text, centerX, y, color)
+    private fun drawCentered(context: GuiGraphicsExtractor, text: String, centerX: Int, y: Int, color: Int) {
+        ThemeRenderer.drawCenteredTextWithShadow(context, font, text, centerX, y, color)
     }
 
-    private fun drawText(context: DrawContext, text: String, x: Int, y: Int, color: Int) {
-        ThemeRenderer.drawTextWithShadow(context, textRenderer, text, x, y, color)
+    private fun drawText(context: GuiGraphicsExtractor, text: String, x: Int, y: Int, color: Int) {
+        ThemeRenderer.drawTextWithShadow(context, font, text, x, y, color)
     }
 }

@@ -1,6 +1,6 @@
 package dev.ryan.playerlist
 
-import net.minecraft.text.Style
+import net.minecraft.network.chat.Style
 import java.util.concurrent.atomic.LongAdder
 
 internal enum class TransformKind {

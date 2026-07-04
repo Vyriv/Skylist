@@ -1,10 +1,10 @@
 package dev.ryan.playerlist
 
-import net.minecraft.text.MutableText
-import net.minecraft.text.OrderedText
-import net.minecraft.text.StringVisitable
-import net.minecraft.text.Style
-import net.minecraft.text.Text
+import net.minecraft.network.chat.MutableComponent
+import net.minecraft.util.FormattedCharSequence
+import net.minecraft.network.chat.FormattedText
+import net.minecraft.network.chat.Style
+import net.minecraft.network.chat.Component
 import java.util.Optional
 
 internal object OrderedTextStyleSupport {
@@ -23,9 +23,9 @@ internal object OrderedTextStyleSupport {
     }
 
     fun orderedTextSource(
-        text: OrderedText,
+        text: FormattedCharSequence,
         bypassCache: Boolean,
-        sourceCache: NameStylerIdentityCache<OrderedText, OrderedTextSourceData>,
+        sourceCache: NameStylerIdentityCache<FormattedCharSequence, OrderedTextSourceData>,
         onCacheHit: () -> Unit,
         onCacheMiss: () -> Unit,
     ): OrderedTextSourceLookup {
@@ -123,7 +123,7 @@ internal object OrderedTextStyleSupport {
         styledMatchText: (ResolvedOrderedMatch, Double) -> Text,
         appendBadge: (Text, PlayerCustomizationRegistry.PlayerCustomization, Style) -> Text,
     ): Text {
-        val rebuiltText = Text.empty()
+        val rebuiltText = Component.empty()
         var currentIndex = 0
 
         plan.matches.forEach { orderedMatch ->
@@ -175,7 +175,7 @@ internal object OrderedTextStyleSupport {
         return styledRuns
     }
 
-    fun collectRuns(message: OrderedText): List<StyledRun> {
+    fun collectRuns(message: FormattedCharSequence): List<StyledRun> {
         val styledRuns = mutableListOf<StyledRun>()
         var currentStyle: Style? = null
         var currentTextBuilder = StringBuilder()
@@ -217,7 +217,7 @@ internal object OrderedTextStyleSupport {
     }
 
     fun appendOriginalRange(
-        target: MutableText,
+        target: MutableComponent,
         runs: List<StyledRun>,
         start: Int,
         end: Int,
@@ -234,13 +234,13 @@ internal object OrderedTextStyleSupport {
             val localStart = (start - styledRun.start).coerceAtLeast(0)
             val localEnd = (end - styledRun.start).coerceAtMost(styledRun.text.length)
             if (localStart < localEnd) {
-                target.append(Text.literal(styledRun.text.substring(localStart, localEnd)).setStyle(styledRun.style))
+                target.append(Component.literal(styledRun.text.substring(localStart, localEnd)).setStyle(styledRun.style))
             }
         }
     }
 
     fun buildOriginalRangeText(runs: List<StyledRun>, start: Int, end: Int): Text {
-        val output = Text.empty()
+        val output = Component.empty()
         appendOriginalRange(output, runs, start, end)
         return output
     }
@@ -248,7 +248,7 @@ internal object OrderedTextStyleSupport {
     fun styleAt(runs: List<StyledRun>, index: Int): Style =
         runs.firstOrNull { styledRun -> index in styledRun.start until styledRun.end }?.style ?: Style.EMPTY
 
-    fun plainText(message: StringVisitable): String = buildString {
+    fun plainText(message: FormattedText): String = buildString {
         message.visit({ _, segment ->
             append(segment)
             Optional.empty<Unit>()

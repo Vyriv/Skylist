@@ -3,7 +3,7 @@ package dev.ryan.playerlist
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import net.fabricmc.loader.api.FabricLoader
-import net.minecraft.text.Text
+import net.minecraft.network.chat.Component
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Locale

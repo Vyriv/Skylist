@@ -1,10 +1,10 @@
 package dev.ryan.playerlist
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
-import net.minecraft.client.texture.NativeImage
-import net.minecraft.client.texture.NativeImageBackedTexture
-import net.minecraft.util.AssetInfo
-import net.minecraft.util.Identifier
+import com.mojang.blaze3d.platform.NativeImage
+import net.minecraft.client.renderer.texture.DynamicTexture
+import net.minecraft.core.ClientAsset
+import net.minecraft.resources.Identifier
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -44,7 +44,7 @@ object CapeTextureManager {
         }
     }
 
-    fun getCapeTexture(resourcePath: String?, capeUrl: String?): AssetInfo.TextureAssetInfo? {
+    fun getCapeTexture(resourcePath: String?, capeUrl: String?): ClientAsset.ResourceTexture? {
         val normalizedUrl = capeUrl?.trim()?.takeIf { it.isNotEmpty() }
         if (normalizedUrl != null) {
             return getRemoteCapeTexture(normalizedUrl)
@@ -58,7 +58,7 @@ object CapeTextureManager {
         capeCacheBySource.entries.removeIf { it.key.startsWith("url:") }
     }
 
-    private fun getBundledCapeTexture(resourcePath: String): AssetInfo.TextureAssetInfo? {
+    private fun getBundledCapeTexture(resourcePath: String): ClientAsset.ResourceTexture? {
         val cacheKey = "asset:$resourcePath"
         val cachedCape = capeCacheBySource.computeIfAbsent(cacheKey) {
             CachedCape(isRemote = false, loadedCape = loadBundledCape(resourcePath))
@@ -66,7 +66,7 @@ object CapeTextureManager {
         return cachedCape.loadedCape?.textureAsset
     }
 
-    private fun getRemoteCapeTexture(capeUrl: String): AssetInfo.TextureAssetInfo? {
+    private fun getRemoteCapeTexture(capeUrl: String): ClientAsset.ResourceTexture? {
         val cacheKey = "url:$capeUrl"
         val cachedCape = capeCacheBySource.computeIfAbsent(cacheKey) { CachedCape(isRemote = true) }
         if (cachedCape.loadedCape != null) {
@@ -110,7 +110,7 @@ object CapeTextureManager {
     }
 
     private fun loadBundledCape(resourcePath: String): LoadedCape {
-        val textureId = Identifier.of("playerlist", "dynamic_capes/${sanitizePath(resourcePath)}")
+        val textureId = Identifier.fromNamespaceAndPath("playerlist", "dynamic_capes/${sanitizePath(resourcePath)}")
         val stream = openResource(resourcePath) ?: return LoadedCape(null, null)
 
         return stream.use { input ->
@@ -133,9 +133,9 @@ object CapeTextureManager {
     private fun loadStaticCape(textureId: Identifier, input: InputStream): LoadedCape {
         val image = ImageIO.read(input) ?: return LoadedCape(null, null)
         val nativeImage = bufferedImageToNativeImage(image)
-        val texture = NativeImageBackedTexture({ textureId.toString() }, nativeImage)
-        PlayerListMod.client.textureManager.registerTexture(textureId, texture)
-        return LoadedCape(AssetInfo.TextureAssetInfo(textureId, textureId), null)
+        val texture = DynamicTexture({ textureId.toString() }, nativeImage)
+        PlayerListMod.client.textureManager.register(textureId, texture)
+        return LoadedCape(ClientAsset.ResourceTexture(textureId, textureId), null)
     }
 
     private fun loadAnimatedCape(textureId: Identifier, input: InputStream): LoadedCape {
@@ -164,10 +164,10 @@ object CapeTextureManager {
             }
 
             val initialImage = frames.first().toNativeImage()
-            val texture = NativeImageBackedTexture({ textureId.toString() }, initialImage)
-            PlayerListMod.client.textureManager.registerTexture(textureId, texture)
+            val texture = DynamicTexture({ textureId.toString() }, initialImage)
+            PlayerListMod.client.textureManager.register(textureId, texture)
             return LoadedCape(
-                textureAsset = AssetInfo.TextureAssetInfo(textureId, textureId),
+                textureAsset = ClientAsset.ResourceTexture(textureId, textureId),
                 animatedTexture = AnimatedCapeTexture(texture, frames),
             )
         }
@@ -236,7 +236,7 @@ object CapeTextureManager {
     }
 
     private fun textureIdForRemote(capeUrl: String): Identifier =
-        Identifier.of(
+        Identifier.fromNamespaceAndPath(
             "playerlist",
             "dynamic_capes/remote_${UUID.nameUUIDFromBytes(capeUrl.toByteArray()).toString().replace("-", "")}",
         )
@@ -260,7 +260,7 @@ object CapeTextureManager {
     }
 
     private data class LoadedCape(
-        val textureAsset: AssetInfo.TextureAssetInfo?,
+        val textureAsset: ClientAsset.ResourceTexture?,
         val animatedTexture: AnimatedCapeTexture?,
     ) {
         fun tick() {
@@ -292,7 +292,7 @@ object CapeTextureManager {
     }
 
     private class AnimatedCapeTexture(
-        private val texture: NativeImageBackedTexture,
+        private val texture: DynamicTexture,
         private val frames: List<AnimatedFrame>,
     ) {
         private var frameIndex = 0
@@ -309,7 +309,7 @@ object CapeTextureManager {
             }
 
             frameIndex = (frameIndex + 1) % frames.size
-            texture.setImage(frames[frameIndex].toNativeImage())
+            texture.setPixels(frames[frameIndex].toNativeImage())
             texture.upload()
             lastFrameChange = now
         }

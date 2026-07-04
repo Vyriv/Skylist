@@ -1,44 +1,44 @@
 package dev.ryan.playerlist.mixin;
 
 import dev.ryan.playerlist.NameStyler;
-import net.minecraft.scoreboard.AbstractTeam;
-import net.minecraft.scoreboard.Team;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
+import net.minecraft.world.scores.PlayerTeam;
+import net.minecraft.world.scores.Team;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(Team.class)
+@Mixin(PlayerTeam.class)
 public abstract class TeamMixin {
-    @Inject(method = "decorateName(Lnet/minecraft/text/Text;)Lnet/minecraft/text/MutableText;", at = @At("RETURN"), cancellable = true)
-    private void playerlist$decorateTeamName(Text name, CallbackInfoReturnable<MutableText> cir) {
-        MutableText current = cir.getReturnValue();
+    @Inject(method = "getFormattedName(Lnet/minecraft/network/chat/Component;)Lnet/minecraft/network/chat/MutableComponent;", at = @At("RETURN"), cancellable = true)
+    private void playerlist$decorateTeamName(Component name, CallbackInfoReturnable<MutableComponent> cir) {
+        MutableComponent current = cir.getReturnValue();
         if (current == null) {
             return;
         }
 
-        Text styled = NameStyler.INSTANCE.applyScoreboardDisplayDecorations(current);
+        Component styled = NameStyler.INSTANCE.applyScoreboardDisplayDecorations(current);
         if (styled != current) {
-            cir.setReturnValue((MutableText) styled);
+            cir.setReturnValue((MutableComponent) styled);
         }
     }
 
-    @Inject(method = "decorateName(Lnet/minecraft/scoreboard/AbstractTeam;Lnet/minecraft/text/Text;)Lnet/minecraft/text/MutableText;", at = @At("RETURN"), cancellable = true)
+    @Inject(method = "formatNameForTeam(Lnet/minecraft/world/scores/Team;Lnet/minecraft/network/chat/Component;)Lnet/minecraft/network/chat/MutableComponent;", at = @At("RETURN"), cancellable = true)
     private static void playerlist$decorateStaticTeamName(
-        AbstractTeam team,
-        Text name,
-        CallbackInfoReturnable<MutableText> cir
+        Team team,
+        Component name,
+        CallbackInfoReturnable<MutableComponent> cir
     ) {
-        MutableText current = cir.getReturnValue();
+        MutableComponent current = cir.getReturnValue();
         if (current == null) {
             return;
         }
 
-        Text styled = NameStyler.INSTANCE.applyScoreboardDisplayDecorations(current);
+        Component styled = NameStyler.INSTANCE.applyScoreboardDisplayDecorations(current);
         if (styled != current) {
-            cir.setReturnValue((MutableText) styled);
+            cir.setReturnValue((MutableComponent) styled);
         }
     }
 }

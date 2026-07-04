@@ -1,18 +1,18 @@
 package dev.ryan.playerlist.mixin;
 
 import dev.ryan.playerlist.NameStyler;
-import net.minecraft.client.gui.hud.ChatHud;
-import net.minecraft.text.OrderedText;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.components.ChatComponent;
+import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
-@Mixin(ChatHud.class)
+@Mixin(ChatComponent.class)
 public abstract class ChatHudMixin {
     @ModifyVariable(method = "addMessage", at = @At("HEAD"), argsOnly = true)
-    private Text playerlist$styleChatMessage(Text text) {
+    private Component playerlist$styleChatMessage(Component text) {
         if (text == null || !NameStyler.INSTANCE.hasChatHeaderStyles()) {
             return text;
         }
@@ -21,19 +21,19 @@ public abstract class ChatHudMixin {
     }
 
     @ModifyArg(
-        method = "addVisibleMessage",
+        method = "addMessageToDisplayQueue",
         at = @At(
             value = "INVOKE",
-            target = "Lnet/minecraft/client/gui/hud/ChatHudLine$Visible;<init>(ILnet/minecraft/text/OrderedText;Lnet/minecraft/client/gui/hud/MessageIndicator;Z)V"
+            target = "Lnet/minecraft/client/multiplayer/chat/GuiMessage$Line;<init>(Lnet/minecraft/client/multiplayer/chat/GuiMessage;Lnet/minecraft/util/FormattedCharSequence;Z)V"
         ),
         index = 1
     )
-    private OrderedText playerlist$styleVisibleChatLine(OrderedText text) {
+    private FormattedCharSequence playerlist$styleVisibleChatLine(FormattedCharSequence text) {
         if (text == null || (!NameStyler.INSTANCE.hasChatHeaderStyles() && !NameStyler.INSTANCE.hasGradientStyles())) {
             return text;
         }
 
-        OrderedText styled = text;
+        FormattedCharSequence styled = text;
         if (NameStyler.INSTANCE.hasChatHeaderStyles()) {
             styled = NameStyler.INSTANCE.applyChatHeaderToOrderedText(styled);
         }

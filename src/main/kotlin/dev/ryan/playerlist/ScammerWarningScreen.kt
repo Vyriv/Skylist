@@ -1,9 +1,9 @@
 package dev.ryan.playerlist
 
-import net.minecraft.client.gui.DrawContext
-import net.minecraft.client.gui.screen.Screen
-import net.minecraft.client.gui.widget.ButtonWidget
-import net.minecraft.text.Text
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.screens.Screen
+import net.minecraft.client.gui.components.Button
+import net.minecraft.network.chat.Component
 import java.util.concurrent.TimeUnit
 
 class ScammerWarningScreen(
@@ -16,24 +16,24 @@ class ScammerWarningScreen(
     private val score: Double?,
     private val recommendedAction: ScammerListManager.ScammerRecommendedAction,
     private val continueCommand: String? = null,
-) : Screen(Text.literal("Scammer Warning")) {
-    private var acknowledgeButton: ButtonWidget? = null
+) : Screen(Component.literal("Scammer Warning")) {
+    private var acknowledgeButton: Button? = null
 
     override fun init() {
         super.init()
-        acknowledgeButton = ThemedButtonWidget.builder(Text.literal(if (continueCommand != null) "Continue" else "Dismiss")) {
-            continueCommand?.let { client?.player?.networkHandler?.sendChatCommand(it) }
-            close()
-        }.dimensions(width / 2 - 60, height / 2 + 26, 120, 20).build().also { addDrawableChild(it) }
+        acknowledgeButton = ThemedButtonWidget.builder(Component.literal(if (continueCommand != null) "Continue" else "Dismiss")) {
+            continueCommand?.let { minecraft.player?.networkHandler?.sendChatCommand(it) }
+            onClose()
+        }.dimensions(width / 2 - 60, height / 2 + 26, 120, 20).build().also { addRenderableWidget(it) }
     }
 
-    override fun shouldPause(): Boolean = false
+    override fun isPauseScreen(): Boolean = false
 
-    override fun close() {
-        client?.setScreen(parent)
+    override fun onClose() {
+        minecraft.setScreen(parent)
     }
 
-    override fun render(context: DrawContext, mouseX: Int, mouseY: Int, deltaTicks: Float) {
+    override fun extractRenderState(context: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, deltaTicks: Float) {
         val theme = ThemeManager.current()
         context.fill(0, 0, width, height, theme.overlayBackground)
         val left = width / 2 - 170
@@ -48,7 +48,7 @@ class ScammerWarningScreen(
         }
         drawCentered(context, severityLine(), width / 2, top + 52 + wrappedReason.size * 10, theme.lightTextAccent)
         drawCentered(context, relativeCaseText(), width / 2, top + 64 + wrappedReason.size * 10, theme.subtleText)
-        super.render(context, mouseX, mouseY, deltaTicks)
+        super.extractRenderState(context, mouseX, mouseY, deltaTicks)
         ThemeRenderer.drawButton(context, acknowledgeButton, mouseX.toDouble(), mouseY.toDouble(), false, theme)
     }
 
@@ -58,7 +58,7 @@ class ScammerWarningScreen(
         var current = StringBuilder()
         for (word in words) {
             val candidate = if (current.isEmpty()) word else "${current} $word"
-            if (textRenderer.getWidth(candidate) <= maxWidth) {
+            if (font.getWidth(candidate) <= maxWidth) {
                 current = StringBuilder(candidate)
             } else {
                 if (current.isNotEmpty()) lines += current.toString()
@@ -69,8 +69,8 @@ class ScammerWarningScreen(
         return lines
     }
 
-    private fun drawCentered(context: DrawContext, text: String, centerX: Int, y: Int, color: Int) {
-        ThemeRenderer.drawCenteredText(context, textRenderer, text, centerX, y, color)
+    private fun drawCentered(context: GuiGraphicsExtractor, text: String, centerX: Int, y: Int, color: Int) {
+        ThemeRenderer.drawCenteredText(context, font, text, centerX, y, color)
     }
 
     private fun relativeCaseText(): String {

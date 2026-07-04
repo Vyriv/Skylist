@@ -25,7 +25,7 @@ internal class NameStylerLruCache<K, V>(private val maxEntries: Int) : LinkedHas
 // Fixed-size identity cache using two-way open addressing.
 // Keys are matched by JVM reference identity (===), not structural equality.
 // Used only to skip redundant Skylist text-styling passes when the same
-// Text or OrderedText object arrives multiple times in the same render frame.
+// Text or FormattedCharSequence object arrives multiple times in the same render frame.
 // Not thread-safe; callers in NameStyler synchronize externally where required.
 internal class NameStylerIdentityCache<K : Any, V : Any>(requestedSize: Int) {
     private val size = requestedSize.coerceAtLeast(2).nextPowerOfTwo()
