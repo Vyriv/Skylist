@@ -17,9 +17,11 @@ internal object LegacyMinecraftTextStyler {
     private val trailingBracketPrefixRegex = Regex("(\\[[^\\]]+])(\\s*)$")
     /** SkyBlock tab/chat level tags like [435] or [1,234] — never treat these as Hypixel ranks. */
     private val skyblockLevelInnerRegex = Regex("^\\d[\\d,]*$")
+    /** Dungeon class tags like [M]/[T]/[H]/[B]/[A] — keep next to the name. */
+    private val dungeonClassInnerRegex = Regex("^[MTHBA]$", RegexOption.IGNORE_CASE)
 
     // Hypixel ranks are "[RANK] " before the username. SkyBlock often puts a numeric
-    // level bracket closer to the name ([435]); never replace those — only ranks.
+    // level or dungeon class bracket closer to the name ([435] / [M]); never replace those.
     fun resolveRankPrefixReplacement(
         beforeText: String,
         customization: PlayerCustomizationRegistry.PlayerCustomization,
@@ -30,14 +32,14 @@ internal object LegacyMinecraftTextStyler {
         }
 
         var work = beforeText
-        val levelSuffix = StringBuilder()
+        val protectedSuffix = StringBuilder()
         while (true) {
-            val levelMatch = trailingBracketPrefixRegex.find(work) ?: break
-            val bracket = levelMatch.groupValues[1]
+            val protectedMatch = trailingBracketPrefixRegex.find(work) ?: break
+            val bracket = protectedMatch.groupValues[1]
             val inner = bracket.substring(1, bracket.length - 1)
-            if (!isSkyblockLevelBracketInner(inner)) break
-            levelSuffix.insert(0, levelMatch.value)
-            work = work.substring(0, levelMatch.range.first)
+            if (!isProtectedNonRankBracketInner(inner)) break
+            protectedSuffix.insert(0, protectedMatch.value)
+            work = work.substring(0, protectedMatch.range.first)
         }
 
         val rankMatch = trailingBracketPrefixRegex.find(work)
@@ -45,25 +47,19 @@ internal object LegacyMinecraftTextStyler {
             val trailingWhitespace = rankMatch.groupValues[2]
             return RankPrefixReplacement(
                 before = work.substring(0, rankMatch.range.first),
-                replacement = rankPrefix.text + trailingWhitespace + levelSuffix,
+                replacement = rankPrefix.text + trailingWhitespace + protectedSuffix,
                 copyName = rankPrefix.copyName(),
             )
         }
 
-        if (levelSuffix.isNotEmpty()) {
-            val label = rankPrefix.text
-            val replacement = if (label.endsWith(" ")) label else "$label "
-            return RankPrefixReplacement(
-                before = work + levelSuffix,
-                replacement = replacement,
-                copyName = rankPrefix.copyName(),
-            )
-        }
+        // No Hypixel rank tag — leave level/class tags alone; do not insert a custom prefix.
         return null
     }
 
-    private fun isSkyblockLevelBracketInner(inner: String): Boolean =
-        skyblockLevelInnerRegex.matches(inner.trim())
+    private fun isProtectedNonRankBracketInner(inner: String): Boolean {
+        val trimmed = inner.trim()
+        return skyblockLevelInnerRegex.matches(trimmed) || dungeonClassInnerRegex.matches(trimmed)
+    }
 
     private fun findTrailingRankMatch(visiblePrefix: String): MatchResult? {
         var end = visiblePrefix.length
@@ -72,7 +68,7 @@ internal object LegacyMinecraftTextStyler {
             val match = trailingBracketPrefixRegex.find(slice) ?: return null
             val bracket = match.groupValues[1]
             val inner = bracket.substring(1, bracket.length - 1)
-            if (!isSkyblockLevelBracketInner(inner)) return match
+            if (!isProtectedNonRankBracketInner(inner)) return match
             end = match.range.first
         }
         return null

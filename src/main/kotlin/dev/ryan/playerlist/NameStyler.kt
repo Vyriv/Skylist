@@ -266,6 +266,7 @@ object NameStyler {
                 includeBadges = true,
                 terminalBadgesOnly = true,
                 allowTruncatedPrefix = true,
+                allowRankPrefix = true,
             ) ?: sourceText
         }
 
@@ -278,6 +279,7 @@ object NameStyler {
                 terminalBadgesOnly = true,
                 allowTruncatedPrefix = true,
                 replaceMatchedName = true,
+                allowRankPrefix = true,
             ) ?: sourceText
         }
 
@@ -288,6 +290,7 @@ object NameStyler {
             includeBadges = true,
             terminalBadgesOnly = true,
             allowTruncatedPrefix = true,
+            allowRankPrefix = true,
         ) ?: parsed
     }
 
@@ -299,6 +302,7 @@ object NameStyler {
             terminalBadgesOnly = true,
             allowTruncatedPrefix = true,
             replaceMatchedName = true,
+            allowRankPrefix = true,
         ) ?: parsed
     }
 
@@ -508,7 +512,7 @@ object NameStyler {
 
                 val matchIndex = match.index
                 val matchedName = output.substring(matchIndex, matchIndex + match.matchedName.length)
-                val rankReplacement = if (!terminalBadgesOnly) {
+                val rankReplacement = if (customization.hasRankPrefix) {
                     LegacyMinecraftTextStyler.resolveRankPrefixReplacement(output.substring(index, matchIndex), customization)
                 } else {
                     null
@@ -585,7 +589,7 @@ object NameStyler {
                 val matchIndex = match.index
                 val matchedName = output.substring(matchIndex, matchIndex + match.matchedName.length)
                 val displayName = customization.displayName(matchedName)
-                val rankReplacement = if (!terminalBadgesOnly) {
+                val rankReplacement = if (customization.hasRankPrefix) {
                     LegacyMinecraftTextStyler.resolveRankPrefixReplacement(output.substring(index, matchIndex), customization)
                 } else {
                     null

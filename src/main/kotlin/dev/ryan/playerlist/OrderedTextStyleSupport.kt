@@ -5,6 +5,7 @@ import net.minecraft.util.FormattedCharSequence
 import net.minecraft.network.chat.FormattedText
 import net.minecraft.network.chat.Style
 import net.minecraft.network.chat.Component
+import java.util.Locale
 import java.util.Optional
 
 internal object OrderedTextStyleSupport {
@@ -297,6 +298,28 @@ internal object OrderedTextStyleSupport {
 
     fun chatHeaderBoundary(plain: String): Int {
         val delimiterIndex = plain.indexOf(": ")
-        return if (delimiterIndex == -1) Int.MAX_VALUE else delimiterIndex
+        if (delimiterIndex == -1) return Int.MAX_VALUE
+        // Party/guild roster lines use labels like "Party Moderators: [MVP+] Name".
+        if (isRosterOrListLabel(plain.substring(0, delimiterIndex))) return Int.MAX_VALUE
+        return delimiterIndex
+    }
+
+    private fun isRosterOrListLabel(beforeColon: String): Boolean {
+        val upper = beforeColon.trim().uppercase(Locale.ROOT)
+        if (upper.isEmpty()) return false
+        return upper.startsWith("PARTY ")
+            || upper == "PARTY LEADER"
+            || upper == "PARTY MODERATORS"
+            || upper == "PARTY MEMBERS"
+            || upper.startsWith("GUILD ")
+            || upper == "OFFICER"
+            || upper.startsWith("OFFICER ")
+            || upper.startsWith("ONLINE ")
+            || upper.startsWith("TOTAL ")
+            || upper.endsWith(" MEMBERS")
+            || upper.endsWith(" MEMBER")
+            || upper == "LEADER"
+            || upper == "MEMBERS"
+            || upper == "MODERATORS"
     }
 }
