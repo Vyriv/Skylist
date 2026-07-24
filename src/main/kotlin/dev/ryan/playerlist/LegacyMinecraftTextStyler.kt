@@ -14,11 +14,12 @@ internal data class RankPrefixReplacement(
 
 internal object LegacyMinecraftTextStyler {
     private const val maximumTrackedPrefixLength = 96
-    private val rankPrefixSuffixRegex = Regex("\\[[^\\]]+]\\s*$")
+    private val trailingBracketPrefixRegex = Regex("(\\[[^\\]]+])(\\s*)$")
+    /** SkyBlock tab/chat level tags like [435] or [1,234] — never treat these as Hypixel ranks. */
+    private val skyblockLevelInnerRegex = Regex("^\\d[\\d,]*$")
 
-    // Hypixel always prefixes ranked players with "[RANK] " immediately before the
-    // username. We only ever replace that exact trailing bracket + whitespace, so a
-    // player with no matching rank tag in front of their name is left untouched.
+    // Hypixel ranks are "[RANK] " before the username. SkyBlock often puts a numeric
+    // level bracket closer to the name ([435]); never replace those — only ranks.
     fun resolveRankPrefixReplacement(
         beforeText: String,
         customization: PlayerCustomizationRegistry.PlayerCustomization,
@@ -28,15 +29,53 @@ internal object LegacyMinecraftTextStyler {
             return null
         }
 
-        val match = rankPrefixSuffixRegex.find(beforeText) ?: return null
-        val matchedText = match.value
-        val bracketEnd = matchedText.indexOf(']') + 1
-        val trailingWhitespace = if (bracketEnd in 0..matchedText.length) matchedText.substring(bracketEnd) else ""
-        return RankPrefixReplacement(
-            before = beforeText.substring(0, match.range.first),
-            replacement = rankPrefix.text + trailingWhitespace,
-            copyName = rankPrefix.copyName(),
-        )
+        var work = beforeText
+        val levelSuffix = StringBuilder()
+        while (true) {
+            val levelMatch = trailingBracketPrefixRegex.find(work) ?: break
+            val bracket = levelMatch.groupValues[1]
+            val inner = bracket.substring(1, bracket.length - 1)
+            if (!isSkyblockLevelBracketInner(inner)) break
+            levelSuffix.insert(0, levelMatch.value)
+            work = work.substring(0, levelMatch.range.first)
+        }
+
+        val rankMatch = trailingBracketPrefixRegex.find(work)
+        if (rankMatch != null) {
+            val trailingWhitespace = rankMatch.groupValues[2]
+            return RankPrefixReplacement(
+                before = work.substring(0, rankMatch.range.first),
+                replacement = rankPrefix.text + trailingWhitespace + levelSuffix,
+                copyName = rankPrefix.copyName(),
+            )
+        }
+
+        if (levelSuffix.isNotEmpty()) {
+            val label = rankPrefix.text
+            val replacement = if (label.endsWith(" ")) label else "$label "
+            return RankPrefixReplacement(
+                before = work + levelSuffix,
+                replacement = replacement,
+                copyName = rankPrefix.copyName(),
+            )
+        }
+        return null
+    }
+
+    private fun isSkyblockLevelBracketInner(inner: String): Boolean =
+        skyblockLevelInnerRegex.matches(inner.trim())
+
+    private fun findTrailingRankMatch(visiblePrefix: String): MatchResult? {
+        var end = visiblePrefix.length
+        while (end > 0) {
+            val slice = visiblePrefix.substring(0, end)
+            val match = trailingBracketPrefixRegex.find(slice) ?: return null
+            val bracket = match.groupValues[1]
+            val inner = bracket.substring(1, bracket.length - 1)
+            if (!isSkyblockLevelBracketInner(inner)) return match
+            end = match.range.first
+        }
+        return null
     }
 
     fun rememberStyledSegment(recentSegments: ArrayDeque<StyledSegment>, segmentText: String, segmentStyle: Style) {
@@ -76,7 +115,7 @@ internal object LegacyMinecraftTextStyler {
             rawIndex++
         }
 
-        val rankSuffixMatch = rankPrefixSuffixRegex.find(visiblePrefix.toString()) ?: return ""
+        val rankSuffixMatch = findTrailingRankMatch(visiblePrefix.toString()) ?: return ""
         val lastVisibleCharacterIndex = (rankSuffixMatch.range.last downTo rankSuffixMatch.range.first)
             .firstOrNull { !visiblePrefix[it].isWhitespace() } ?: return ""
         val rawEndExclusive = visibleIndexToRawIndex[lastVisibleCharacterIndex] + 1
@@ -187,7 +226,7 @@ internal object LegacyMinecraftTextStyler {
             rawIndex++
         }
 
-        val rankSuffixMatch = rankPrefixSuffixRegex.find(visibleText.toString()) ?: return defaultStyle
+        val rankSuffixMatch = findTrailingRankMatch(visibleText.toString()) ?: return defaultStyle
         val lastVisibleCharacterIndex = (rankSuffixMatch.range.last downTo rankSuffixMatch.range.first)
             .firstOrNull { !visibleText[it].isWhitespace() } ?: return defaultStyle
         val rawEndExclusive = visibleIndexToRawIndex[lastVisibleCharacterIndex] + 1
