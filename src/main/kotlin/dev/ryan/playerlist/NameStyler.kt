@@ -141,7 +141,7 @@ object NameStyler {
         PlayerCustomizationRegistry.find(profile)?.hasChatDisplayOverride() == true
 
     fun hasAnimatedStyledProfile(profile: GameProfile?): Boolean =
-        PlayerCustomizationRegistry.find(profile)?.hasAnimatedGradient() == true
+        PlayerCustomizationRegistry.find(profile)?.animatedGradient == true
 
     fun hasStyledName(name: String?): Boolean =
         PlayerCustomizationRegistry.findByName(name)?.hasNameCustomization() == true
@@ -241,6 +241,7 @@ object NameStyler {
                 normalizedMessage,
                 includeBadges = true,
                 replaceMatchedName = true,
+                allowRankPrefix = true,
             ) ?: sourceText
         }
 
@@ -250,6 +251,7 @@ object NameStyler {
             parsed,
             includeBadges = true,
             replaceMatchedName = true,
+            allowRankPrefix = true,
         ) ?: parsed
     }
 
@@ -339,6 +341,7 @@ object NameStyler {
                 plan,
                 animationTime = animationTime,
                 replaceMatchedName = true,
+                allowRankPrefix = true,
             )
         }
 
@@ -349,6 +352,7 @@ object NameStyler {
                 plan,
                 includeBadges = true,
                 animationTime = animationTime,
+                allowRankPrefix = true,
             )
         }
 
@@ -503,20 +507,36 @@ object NameStyler {
                 }
 
                 val matchIndex = match.index
-                if (matchIndex > index) {
-                    rebuilt.append(output.substring(index, matchIndex))
+                val matchedName = output.substring(matchIndex, matchIndex + match.matchedName.length)
+                val rankReplacement = if (!terminalBadgesOnly) {
+                    LegacyMinecraftTextStyler.resolveRankPrefixReplacement(output.substring(index, matchIndex), customization)
+                } else {
+                    null
                 }
 
-                val matchedName = output.substring(matchIndex, matchIndex + match.matchedName.length)
-                val inheritedRankCodes = LegacyMinecraftTextStyler.inheritedLegacyRankCodes(output, matchIndex, customization)
-                rebuilt.append(
-                    when {
-                        customization.hasExplicitNameColors() || customization.nameBold ->
-                            toLegacyStyledName(matchedName, customization, inheritedRankCodes)
-                        inheritedRankCodes.isNotEmpty() -> inheritedRankCodes + matchedName
-                        else -> matchedName
-                    },
-                )
+                if (rankReplacement != null) {
+                    rebuilt.append(rankReplacement.before)
+                    if (rankReplacement.copyName) {
+                        rebuilt.append(toLegacyStyledName(rankReplacement.replacement + matchedName, customization))
+                    } else {
+                        rebuilt.append(toLegacyStyledRank(rankReplacement.replacement, customization))
+                        rebuilt.append(toLegacyStyledName(matchedName, customization))
+                    }
+                } else {
+                    if (matchIndex > index) {
+                        rebuilt.append(output.substring(index, matchIndex))
+                    }
+
+                    val inheritedRankCodes = LegacyMinecraftTextStyler.inheritedLegacyRankCodes(output, matchIndex, customization)
+                    rebuilt.append(
+                        when {
+                            customization.hasExplicitNameColors() || customization.nameBold ->
+                                toLegacyStyledName(matchedName, customization, inheritedRankCodes)
+                            inheritedRankCodes.isNotEmpty() -> inheritedRankCodes + matchedName
+                            else -> matchedName
+                        },
+                    )
+                }
 
                 customization.nameBadge?.takeUnless { badge ->
                     LegacyMinecraftTextStyler.hasBadgeImmediatelyAfter(output, matchIndex + match.matchedName.length, badge.text)
@@ -563,21 +583,37 @@ object NameStyler {
                 }
 
                 val matchIndex = match.index
-                if (matchIndex > index) {
-                    rebuilt.append(output.substring(index, matchIndex))
-                }
-
                 val matchedName = output.substring(matchIndex, matchIndex + match.matchedName.length)
                 val displayName = customization.displayName(matchedName)
-                val inheritedRankCodes = LegacyMinecraftTextStyler.inheritedLegacyRankCodes(output, matchIndex, customization)
-                rebuilt.append(
-                    when {
-                        displayName != matchedName || customization.hasNameCustomization() ->
-                            toLegacyStyledName(displayName, customization, inheritedRankCodes)
-                        inheritedRankCodes.isNotEmpty() -> inheritedRankCodes + matchedName
-                        else -> matchedName
-                    },
-                )
+                val rankReplacement = if (!terminalBadgesOnly) {
+                    LegacyMinecraftTextStyler.resolveRankPrefixReplacement(output.substring(index, matchIndex), customization)
+                } else {
+                    null
+                }
+
+                if (rankReplacement != null) {
+                    rebuilt.append(rankReplacement.before)
+                    if (rankReplacement.copyName) {
+                        rebuilt.append(toLegacyStyledName(rankReplacement.replacement + displayName, customization))
+                    } else {
+                        rebuilt.append(toLegacyStyledRank(rankReplacement.replacement, customization))
+                        rebuilt.append(toLegacyStyledName(displayName, customization))
+                    }
+                } else {
+                    if (matchIndex > index) {
+                        rebuilt.append(output.substring(index, matchIndex))
+                    }
+
+                    val inheritedRankCodes = LegacyMinecraftTextStyler.inheritedLegacyRankCodes(output, matchIndex, customization)
+                    rebuilt.append(
+                        when {
+                            displayName != matchedName || customization.hasNameCustomization() ->
+                                toLegacyStyledName(displayName, customization, inheritedRankCodes)
+                            inheritedRankCodes.isNotEmpty() -> inheritedRankCodes + matchedName
+                            else -> matchedName
+                        },
+                    )
+                }
 
                 customization.nameBadge?.takeUnless { badge ->
                     LegacyMinecraftTextStyler.hasBadgeImmediatelyAfter(output, matchIndex + match.matchedName.length, badge.text)
@@ -903,6 +939,7 @@ object NameStyler {
         includeBadges: Boolean = false,
         animationTime: Double = 0.0,
         replaceMatchedName: Boolean = false,
+        allowRankPrefix: Boolean = false,
     ): Text =
         OrderedTextStyleSupport.rebuildOrderedTextFromPlan(
             source = source,
@@ -910,16 +947,20 @@ object NameStyler {
             includeBadges = includeBadges,
             animationTime = animationTime,
             replaceMatchedName = replaceMatchedName,
+            allowRankPrefix = allowRankPrefix,
             cachedGradient = ::cachedGradient,
             styledMatchText = ::styledMatchText,
+            styledRankPrefix = ::styledRankPrefix,
             appendBadge = ::appendBadge,
         )
 
     private fun styledMatchText(match: ResolvedOrderedMatch, animationTime: Double): Text {
         val effectiveBaseStyle = applyCustomNameStyle(match.baseStyle, match.customization)
         if (match.isAnimatedGradient) {
-            val animatedStyle = match.animatedStyle ?: return Component.literal(match.content).setStyle(effectiveBaseStyle)
-            return gradientText(match.content, animatedStyle, effectiveBaseStyle, animationTime)
+            val animatedStyle = match.animatedStyle
+            if (animatedStyle != null) {
+                return gradientText(match.content, animatedStyle, effectiveBaseStyle, animationTime)
+            }
         }
         return cachedGradient(match.content, match.customization, match.baseStyle)
     }
@@ -928,51 +969,25 @@ object NameStyler {
         message: FormattedText,
         includeBadges: Boolean = false,
         chatHeaderOnly: Boolean = false,
-        terminalBadgesOnly: Boolean = false,
         replaceMatchedName: Boolean = false,
     ): Text {
-        val rebuilt = Component.empty()
-        var changed = false
-        val recentSegments = ArrayDeque<StyledSegment>()
-        val plain = OrderedTextStyleSupport.plainText(message)
-        val headerBoundary = if (chatHeaderOnly) OrderedTextStyleSupport.chatHeaderBoundary(plain) else Int.MAX_VALUE
-        val candidates = candidatesForVisitableTransform(includeBadges, replaceMatchedName)
-        var visibleIndex = 0
-
-        message.visit({ style, segment ->
-            val segmentStart = visibleIndex
-            val segmentEnd = segmentStart + segment.length
-            visibleIndex = segmentEnd
-
-            val decoratedLength = (headerBoundary - segmentStart).coerceIn(0, segment.length)
-            val decoratedSegment = segment.substring(0, decoratedLength)
-            val untouchedSegment = segment.substring(decoratedLength)
-
-            if (decoratedSegment.isNotEmpty() && NameStyleMatcher.containsCandidate(decoratedSegment, candidates)) {
-                changed = true
-                appendStyledSegment(
-                    rebuilt,
-                    decoratedSegment,
-                    style,
-                    recentSegments,
-                    includeBadges,
-                    plain,
-                    segmentStart,
-                    terminalBadgesOnly,
-                    replaceMatchedName,
-                )
-            } else if (decoratedSegment.isNotEmpty()) {
-                rebuilt.append(Component.literal(decoratedSegment).setStyle(style))
-            }
-
-            if (untouchedSegment.isNotEmpty()) {
-                rebuilt.append(Component.literal(untouchedSegment).setStyle(style))
-            }
-            LegacyMinecraftTextStyler.rememberStyledSegment(recentSegments, segment, style)
-            Optional.empty<Unit>()
-        }, Style.EMPTY)
-
-        return if (changed) rebuilt else if (message is Text) message else rebuilt
+        // Collecting runs upfront (rather than walking segments one at a time) lets rank-prefix
+        // detection look back across segment boundaries, since a "[RANK] " tag rendered in an
+        // earlier segment must still be replaceable when the username arrives in a later one.
+        val runs = OrderedTextStyleSupport.collectRuns(message)
+        val rebuilt = rebuildDecorationsAcrossRuns(
+            runs = runs,
+            includeBadges = includeBadges,
+            terminalBadgesOnly = false,
+            allowTruncatedPrefix = false,
+            replaceMatchedName = replaceMatchedName,
+            chatHeaderOnly = chatHeaderOnly,
+            allowRankPrefix = includeBadges || chatHeaderOnly,
+        )
+        if (rebuilt != null) {
+            return rebuilt
+        }
+        return if (message is Text) message else runsToText(runs)
     }
 
     private fun rebuildOrderedText(
@@ -1089,9 +1104,10 @@ object NameStyler {
         terminalBadgesOnly: Boolean = false,
         allowTruncatedPrefix: Boolean = false,
         replaceMatchedName: Boolean = false,
+        allowRankPrefix: Boolean = false,
     ): Text? {
         val runs = OrderedTextStyleSupport.collectRuns(message)
-        return rebuildDecorationsAcrossRuns(runs, includeBadges, terminalBadgesOnly, allowTruncatedPrefix, replaceMatchedName)
+        return rebuildDecorationsAcrossRuns(runs, includeBadges, terminalBadgesOnly, allowTruncatedPrefix, replaceMatchedName, allowRankPrefix = allowRankPrefix)
     }
 
     private fun rebuildDecorationsAcrossSegments(
@@ -1100,9 +1116,10 @@ object NameStyler {
         terminalBadgesOnly: Boolean = false,
         allowTruncatedPrefix: Boolean = false,
         replaceMatchedName: Boolean = false,
+        allowRankPrefix: Boolean = false,
     ): Text? {
         val runs = OrderedTextStyleSupport.collectRuns(message)
-        return rebuildDecorationsAcrossRuns(runs, includeBadges, terminalBadgesOnly, allowTruncatedPrefix, replaceMatchedName)
+        return rebuildDecorationsAcrossRuns(runs, includeBadges, terminalBadgesOnly, allowTruncatedPrefix, replaceMatchedName, allowRankPrefix = allowRankPrefix)
     }
 
     private fun rebuildDecorationsAcrossRuns(
@@ -1111,9 +1128,13 @@ object NameStyler {
         terminalBadgesOnly: Boolean,
         allowTruncatedPrefix: Boolean,
         replaceMatchedName: Boolean,
+        chatHeaderOnly: Boolean = false,
+        allowRankPrefix: Boolean = false,
     ): Text? {
         val plain = OrderedTextStyleSupport.runsToPlain(runs)
         val candidates = when {
+            chatHeaderOnly && replaceMatchedName -> PlayerCustomizationRegistry.chatHeaderNameCandidates
+            chatHeaderOnly -> PlayerCustomizationRegistry.gradientNameCandidates
             allowTruncatedPrefix && replaceMatchedName -> PlayerCustomizationRegistry.scoreboardDisplayNameCandidates
             allowTruncatedPrefix && includeBadges -> PlayerCustomizationRegistry.scoreboardStyledNameCandidates
             allowTruncatedPrefix -> PlayerCustomizationRegistry.scoreboardGradientNameCandidates
@@ -1125,15 +1146,17 @@ object NameStyler {
             return null
         }
 
+        val matchBoundary = if (chatHeaderOnly) OrderedTextStyleSupport.chatHeaderBoundary(plain) else plain.length
         val rebuilt = Component.empty()
         var changed = false
         var index = 0
 
-        while (index < plain.length) {
+        while (index < matchBoundary) {
             val match = NameStyleMatcher.findFirstNameMatch(plain, candidates, index)
 
-            if (match == null) {
+            if (match == null || match.nameMatch.index >= matchBoundary) {
                 OrderedTextStyleSupport.appendOriginalRange(rebuilt, runs, index, plain.length)
+                index = plain.length
                 break
             }
 
@@ -1141,21 +1164,46 @@ object NameStyler {
             val customization = match.customization
             val matchIndex = nameMatch.index
             val matchedName = nameMatch.matchedName
-
-            if (matchIndex > index) {
-                OrderedTextStyleSupport.appendOriginalRange(rebuilt, runs, index, matchIndex)
-            }
-
             val matchEnd = matchIndex + matchedName.length
             val resolvedMatchedName = plain.substring(matchIndex, matchEnd)
             val baseStyle = OrderedTextStyleSupport.styleAt(runs, matchIndex)
             val displayName = if (replaceMatchedName) customization.displayName(resolvedMatchedName) else resolvedMatchedName
-            val styledName = when {
-                replaceMatchedName || customization.hasNameCustomization() -> {
-                    changed = true
-                    cachedGradient(displayName, customization, baseStyle)
+
+            val rankReplacement = if (allowRankPrefix) {
+                LegacyMinecraftTextStyler.resolveRankPrefixReplacement(plain.substring(index, matchIndex), customization)
+            } else {
+                null
+            }
+
+            val styledName: Text
+            if (rankReplacement != null) {
+                val beforeEnd = index + rankReplacement.before.length
+                if (rankReplacement.before.isNotEmpty()) {
+                    OrderedTextStyleSupport.appendOriginalRange(rebuilt, runs, index, beforeEnd)
                 }
-                else -> OrderedTextStyleSupport.buildOriginalRangeText(runs, matchIndex, matchEnd)
+
+                styledName = if (rankReplacement.copyName) {
+                    cachedGradient(rankReplacement.replacement + displayName, customization, baseStyle)
+                } else {
+                    rebuilt.append(styledRankPrefix(rankReplacement.replacement, customization, baseStyle))
+                    when {
+                        replaceMatchedName || customization.hasNameCustomization() -> cachedGradient(displayName, customization, baseStyle)
+                        else -> OrderedTextStyleSupport.buildOriginalRangeText(runs, matchIndex, matchEnd)
+                    }
+                }
+                changed = true
+            } else {
+                if (matchIndex > index) {
+                    OrderedTextStyleSupport.appendOriginalRange(rebuilt, runs, index, matchIndex)
+                }
+
+                styledName = when {
+                    replaceMatchedName || customization.hasNameCustomization() -> {
+                        changed = true
+                        cachedGradient(displayName, customization, baseStyle)
+                    }
+                    else -> OrderedTextStyleSupport.buildOriginalRangeText(runs, matchIndex, matchEnd)
+                }
             }
 
             val hasBadgeAlready = includeBadges && customization.nameBadge != null &&
@@ -1170,6 +1218,10 @@ object NameStyler {
             }
 
             index = matchEnd
+        }
+
+        if (index < plain.length) {
+            OrderedTextStyleSupport.appendOriginalRange(rebuilt, runs, index, plain.length)
         }
 
         return if (changed) rebuilt else null
@@ -1348,7 +1400,7 @@ object NameStyler {
         var index = 0
         while (index < text.length) {
             val match = NameStyleMatcher.findFirstNameMatch(text, candidates, index) ?: return false
-            if (match.customization.hasAnimatedGradient()) {
+            if (match.customization.animatedGradient) {
                 return true
             }
             index = match.nameMatch.index + match.nameMatch.matchedName.length
@@ -1492,6 +1544,108 @@ object NameStyler {
         }
 
         return animatedGradientText
+    }
+
+    private fun styledRankPrefix(
+        text: String,
+        customization: PlayerCustomizationRegistry.PlayerCustomization,
+        baseStyle: Style,
+        animationTime: Double = 0.0,
+    ): Text {
+        val rankPrefix = customization.nameRankPrefix ?: return Component.literal(text).setStyle(baseStyle)
+        var rankStyle = baseStyle
+        if (rankPrefix.bold) {
+            rankStyle = rankStyle.withBold(true)
+        }
+
+        val colors = rankPrefix.colors ?: return Component.literal(text).setStyle(rankStyle)
+
+        if (rankPrefix.animatedGradient()) {
+            val animatedStyle = resolveRankAnimatedGradientStyle(rankPrefix)
+                ?: return Component.literal(text).setStyle(rankStyle.withColor(colors.left))
+            return gradientText(text, animatedStyle, rankStyle, animationTime)
+        }
+
+        if (colors.left == colors.right) {
+            return Component.literal(text).setStyle(rankStyle.withColor(colors.left))
+        }
+        return staticGradientText(text, colors, rankStyle)
+    }
+
+    private fun toLegacyStyledRank(
+        content: String,
+        customization: PlayerCustomizationRegistry.PlayerCustomization,
+    ): String {
+        val rankPrefix = customization.nameRankPrefix ?: return content
+        val colors = rankPrefix.colors
+        if (colors == null) {
+            return buildString {
+                if (rankPrefix.bold) {
+                    append(LEGACY_MINECRAFT_FORMAT_CODE).append('l')
+                }
+                append(content)
+            }
+        }
+
+        if (colors.left == colors.right && !rankPrefix.animatedGradient()) {
+            return buildString {
+                append(GradientColorMath.buildLegacyHexColorCode(colors.left))
+                if (rankPrefix.bold) {
+                    append(LEGACY_MINECRAFT_FORMAT_CODE).append('l')
+                }
+                append(content)
+            }
+        }
+
+        val output = StringBuilder()
+        val animatedStyle = if (rankPrefix.animatedGradient()) resolveRankAnimatedGradientStyle(rankPrefix) else null
+        val animationTime = if (animatedStyle != null) currentAnimationTime() else 0.0
+        content.forEachIndexed { index, character ->
+            val color = if (animatedStyle != null) {
+                animatedStyle.getColor(index, content.length, animationTime)
+            } else {
+                val frequency = colors.spacing.coerceIn(1.0f, 10.0f)
+                GradientColorMath.gradientLoopColor(
+                    colors.left,
+                    colors.right,
+                    GradientColorMath.gradientFrequencyProgress(index, content.length, frequency),
+                )
+            }
+            output.append(GradientColorMath.buildLegacyHexColorCode(color))
+            if (rankPrefix.bold) {
+                output.append(LEGACY_MINECRAFT_FORMAT_CODE).append('l')
+            }
+            output.append(character)
+        }
+        return output.toString()
+    }
+
+    private fun resolveRankAnimatedGradientStyle(
+        rankPrefix: PlayerCustomizationRegistry.NameRankPrefix,
+    ): AnimatedGradientStyle? {
+        val colors = rankPrefix.colors ?: return null
+        if (!rankPrefix.animatedGradient()) {
+            return null
+        }
+
+        val stepsCount = rankPrefix.animationSteps ?: animatedGradientSteps
+        val speed = rankPrefix.animationSpeed ?: animatedGradientSpeed
+        val gradientSpacing = colors.spacing.coerceIn(1.0f, 10.0f)
+        val cacheKey = AnimatedGradientCacheKey(
+            leftColor = colors.left,
+            rightColor = colors.right,
+            stepsCount = stepsCount,
+            speedBits = speed.toRawBits(),
+            spacingBits = gradientSpacing.toRawBits(),
+        )
+
+        return animatedGradientStyleCache.computeIfAbsent(cacheKey) {
+            AnimatedGradientStyle(
+                steps = AnimatedGradientStyle.buildLoopGradient(colors.left, colors.right, stepsCount),
+                speed = speed,
+                spacing = gradientSpacing,
+            )
+        }
     }
 
     private fun toLegacyStyledName(
@@ -1662,7 +1816,7 @@ object NameStyler {
 
         val match = plan?.matches?.firstOrNull { orderedMatch -> orderedMatch.isAnimatedGradient }
             ?: NameStyleMatcher.findFirstNameMatch(sourceText, candidatesForKind(kind))
-                ?.takeIf { matchedCustomization -> matchedCustomization.customization.hasAnimatedGradient() }
+                ?.takeIf { matchedCustomization -> matchedCustomization.customization.animatedGradient }
                 ?.let { matched ->
                     ResolvedOrderedMatch(
                         start = matched.nameMatch.index,
@@ -1793,7 +1947,7 @@ object NameStyler {
             ?.asSequence()
             ?.mapNotNull { player ->
                 PlayerCustomizationRegistry.find(player.gameProfile)
-                    ?.takeIf { customization -> customization.hasAnimatedGradient() }
+                    ?.takeIf { customization -> customization.animatedGradient }
                     ?.username
             }
             ?.firstOrNull { animatedUsername -> !animatedUsername.equals(self, ignoreCase = true) }

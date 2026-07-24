@@ -133,6 +133,7 @@ object ContentManager {
     private fun loadPlayerCustomization(entry: PlayerCustomizationFile): LoadedPlayerCustomization? {
         val nameStyle = loadNameStyle(entry.style)
         val badge = entry.badge?.let(::loadBadge)
+        val rankPrefix = loadRankPrefix(entry.rankPrefix)
         val resolvedScale = entry.scale
         val resolvedWidthBlocks = entry.widthBlocks
         val resolvedDepthBlocks = entry.depthBlocks ?: resolvedWidthBlocks
@@ -146,6 +147,7 @@ object ContentManager {
             aliases = entry.aliases,
             style = nameStyle,
             badge = badge,
+            rankPrefix = rankPrefix,
             capeResourcePath = entry.capeResourcePath?.trim()?.takeIf { it.isNotEmpty() },
             capeUrl = entry.capeUrl?.trim()?.takeIf { it.isNotEmpty() },
             scale = resolvedScale,
@@ -240,6 +242,77 @@ object ContentManager {
         return LoadedBadge(text, color, badge.bold)
     }
 
+    private fun loadRankPrefix(rankPrefix: RankPrefixFile?): LoadedRankPrefix? {
+        if (rankPrefix == null) {
+            return null
+        }
+
+        val text = rankPrefix.text?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val normalizedMode = rankPrefix.mode.trim().lowercase()
+        val animationSpeed = rankPrefix.animationSpeed?.takeIf { it > 0f }
+        val animationSteps = rankPrefix.animationSteps?.coerceAtLeast(2)
+        val gradientSpacing = (rankPrefix.gradientFrequency ?: rankPrefix.gradientSpacing)?.coerceIn(1.0f, 10.0f) ?: 1.0f
+        val animated = rankPrefix.animated == true
+
+        return when (normalizedMode) {
+            "copy_name", "copy-name", "copyname" ->
+                LoadedRankPrefix(
+                    mode = LoadedRankPrefix.Mode.COPY_NAME,
+                    text = text,
+                    bold = rankPrefix.bold,
+                    animationSpeed = animationSpeed,
+                    animationSteps = animationSteps,
+                    gradientSpacing = gradientSpacing,
+                )
+
+            "gradient" -> {
+                val left = parseColor(rankPrefix.leftColor ?: rankPrefix.color) ?: return null
+                val right = parseColor(rankPrefix.rightColor ?: rankPrefix.color) ?: return null
+                LoadedRankPrefix(
+                    mode = if (animated || animationSpeed != null) LoadedRankPrefix.Mode.ANIMATED_GRADIENT else LoadedRankPrefix.Mode.GRADIENT,
+                    text = text,
+                    leftColor = left,
+                    rightColor = right,
+                    bold = rankPrefix.bold,
+                    animationSpeed = animationSpeed,
+                    animationSteps = animationSteps,
+                    gradientSpacing = gradientSpacing,
+                )
+            }
+
+            "animated_gradient", "animated-gradient", "animatedgradient" -> {
+                val left = parseColor(rankPrefix.leftColor ?: rankPrefix.color) ?: return null
+                val right = parseColor(rankPrefix.rightColor ?: rankPrefix.color) ?: return null
+                LoadedRankPrefix(
+                    mode = LoadedRankPrefix.Mode.ANIMATED_GRADIENT,
+                    text = text,
+                    leftColor = left,
+                    rightColor = right,
+                    bold = rankPrefix.bold,
+                    animationSpeed = animationSpeed,
+                    animationSteps = animationSteps,
+                    gradientSpacing = gradientSpacing,
+                )
+            }
+
+            "solid" -> {
+                val color = parseColor(rankPrefix.color ?: rankPrefix.leftColor ?: rankPrefix.rightColor) ?: return null
+                LoadedRankPrefix(
+                    mode = LoadedRankPrefix.Mode.SOLID,
+                    text = text,
+                    leftColor = color,
+                    rightColor = color,
+                    bold = rankPrefix.bold,
+                    animationSpeed = animationSpeed,
+                    animationSteps = animationSteps,
+                    gradientSpacing = gradientSpacing,
+                )
+            }
+
+            else -> null
+        }
+    }
+
     private fun parseColor(raw: String?): Int? {
         val normalized = raw?.trim()?.removePrefix("#") ?: return null
         return when (normalized.length) {
@@ -332,6 +405,7 @@ object ContentManager {
             creditRole = overlay.creditRole ?: creditRole,
             style = overlay.style ?: style,
             badge = overlay.badge ?: badge,
+            rankPrefix = overlay.rankPrefix ?: rankPrefix,
             capeResourcePath = overlay.capeResourcePath ?: capeResourcePath,
             capeUrl = overlay.capeUrl ?: capeUrl,
             scale = overlay.scale ?: scale,
@@ -365,6 +439,7 @@ object ContentManager {
             creditRole = creditRole?.trim()?.takeIf { it.isNotEmpty() },
             style = style?.normalized(),
             badge = badge?.normalized(),
+            rankPrefix = rankPrefix?.normalized(),
             capeResourcePath = capeResourcePath?.trim()?.takeIf { it.isNotEmpty() },
             capeUrl = capeUrl?.trim()?.takeIf { it.isNotEmpty() },
         )
@@ -392,6 +467,15 @@ object ContentManager {
             color = color?.trim()?.takeIf { it.isNotEmpty() },
         )
 
+    private fun RankPrefixFile.normalized(): RankPrefixFile =
+        copy(
+            text = text?.trim()?.takeIf { it.isNotEmpty() },
+            mode = mode.trim().ifEmpty { "solid" },
+            color = color?.trim()?.takeIf { it.isNotEmpty() },
+            leftColor = leftColor?.trim()?.takeIf { it.isNotEmpty() },
+            rightColor = rightColor?.trim()?.takeIf { it.isNotEmpty() },
+        )
+
     private fun ReasonContent.normalized(): ReasonContent =
         copy(
             commonReasons = commonReasons
@@ -416,6 +500,7 @@ object ContentManager {
         val aliases: List<String>,
         val style: LoadedNameStyle?,
         val badge: LoadedBadge?,
+        val rankPrefix: LoadedRankPrefix?,
         val capeResourcePath: String?,
         val capeUrl: String?,
         val scale: Float?,
@@ -449,6 +534,24 @@ object ContentManager {
         val bold: Boolean,
     )
 
+    data class LoadedRankPrefix(
+        val mode: Mode,
+        val text: String,
+        val leftColor: Int? = null,
+        val rightColor: Int? = null,
+        val bold: Boolean = false,
+        val animationSpeed: Float? = null,
+        val animationSteps: Int? = null,
+        val gradientSpacing: Float = 1.0f,
+    ) {
+        enum class Mode {
+            SOLID,
+            GRADIENT,
+            ANIMATED_GRADIENT,
+            COPY_NAME,
+        }
+    }
+
     data class LoadedDeveloperCredit(
         val username: String,
         val label: String,
@@ -477,6 +580,7 @@ object ContentManager {
         var creditRole: String? = null,
         var style: NameStyleFile? = null,
         var badge: BadgeFile? = null,
+        var rankPrefix: RankPrefixFile? = null,
         var capeResourcePath: String? = null,
         var capeUrl: String? = null,
         var scale: Float? = null,
@@ -505,6 +609,20 @@ object ContentManager {
     data class BadgeFile(
         var text: String? = null,
         var color: String? = null,
+        var bold: Boolean = false,
+    )
+
+    data class RankPrefixFile(
+        var text: String? = null,
+        var mode: String = "solid",
+        var color: String? = null,
+        var leftColor: String? = null,
+        var rightColor: String? = null,
+        var animated: Boolean? = null,
+        var animationSpeed: Float? = null,
+        var animationSteps: Int? = null,
+        var gradientSpacing: Float? = null,
+        var gradientFrequency: Float? = null,
         var bold: Boolean = false,
     )
 

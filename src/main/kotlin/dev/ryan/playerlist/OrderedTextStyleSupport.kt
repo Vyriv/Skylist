@@ -81,8 +81,12 @@ internal object OrderedTextStyleSupport {
                 break
             }
 
-            val usesAnimatedGradient = customization.nameAnimated &&
+            val nameAnimatedGradient = customization.nameAnimated &&
                 customization.nameColors?.let { gradientColors -> gradientColors.left != gradientColors.right } == true
+            val rankPrefix = customization.nameRankPrefix
+            val usesAnimatedGradient = nameAnimatedGradient ||
+                rankPrefix?.animatedGradient() == true ||
+                (rankPrefix?.copyName() == true && nameAnimatedGradient)
             val badgeText = customization.nameBadge?.text
             orderedMatches.add(
                 ResolvedOrderedMatch(
@@ -119,26 +123,62 @@ internal object OrderedTextStyleSupport {
         includeBadges: Boolean,
         animationTime: Double,
         replaceMatchedName: Boolean,
+        allowRankPrefix: Boolean = false,
         cachedGradient: (String, PlayerCustomizationRegistry.PlayerCustomization, Style) -> Text,
         styledMatchText: (ResolvedOrderedMatch, Double) -> Text,
+        styledRankPrefix: (String, PlayerCustomizationRegistry.PlayerCustomization, Style, Double) -> Text,
         appendBadge: (Text, PlayerCustomizationRegistry.PlayerCustomization, Style) -> Text,
     ): Text {
         val rebuiltText = Component.empty()
         var currentIndex = 0
 
         plan.matches.forEach { orderedMatch ->
-            if (orderedMatch.start > currentIndex) {
-                appendOriginalRange(rebuiltText, source.runs, currentIndex, orderedMatch.start)
+            val rankReplacement = if (allowRankPrefix) {
+                LegacyMinecraftTextStyler.resolveRankPrefixReplacement(
+                    source.plain.substring(currentIndex, orderedMatch.start),
+                    orderedMatch.customization,
+                )
+            } else {
+                null
             }
 
-            val styledName = when {
-                replaceMatchedName -> cachedGradient(
-                    orderedMatch.customization.displayName(orderedMatch.content),
-                    orderedMatch.customization,
-                    orderedMatch.baseStyle,
-                )
-                orderedMatch.hasExplicitNameColors -> styledMatchText(orderedMatch, animationTime)
-                else -> buildOriginalRangeText(source.runs, orderedMatch.start, orderedMatch.end)
+            val styledName: Text
+            if (rankReplacement != null) {
+                val beforeEnd = currentIndex + rankReplacement.before.length
+                if (rankReplacement.before.isNotEmpty()) {
+                    appendOriginalRange(rebuiltText, source.runs, currentIndex, beforeEnd)
+                }
+
+                val displayName = if (replaceMatchedName) {
+                    orderedMatch.customization.displayName(orderedMatch.content)
+                } else {
+                    orderedMatch.content
+                }
+
+                styledName = if (rankReplacement.copyName) {
+                    cachedGradient(rankReplacement.replacement + displayName, orderedMatch.customization, orderedMatch.baseStyle)
+                } else {
+                    rebuiltText.append(styledRankPrefix(rankReplacement.replacement, orderedMatch.customization, orderedMatch.baseStyle, animationTime))
+                    when {
+                        replaceMatchedName -> cachedGradient(displayName, orderedMatch.customization, orderedMatch.baseStyle)
+                        orderedMatch.hasExplicitNameColors -> styledMatchText(orderedMatch, animationTime)
+                        else -> buildOriginalRangeText(source.runs, orderedMatch.start, orderedMatch.end)
+                    }
+                }
+            } else {
+                if (orderedMatch.start > currentIndex) {
+                    appendOriginalRange(rebuiltText, source.runs, currentIndex, orderedMatch.start)
+                }
+
+                styledName = when {
+                    replaceMatchedName -> cachedGradient(
+                        orderedMatch.customization.displayName(orderedMatch.content),
+                        orderedMatch.customization,
+                        orderedMatch.baseStyle,
+                    )
+                    orderedMatch.hasExplicitNameColors -> styledMatchText(orderedMatch, animationTime)
+                    else -> buildOriginalRangeText(source.runs, orderedMatch.start, orderedMatch.end)
+                }
             }
 
             if (includeBadges && orderedMatch.hasBadge && !orderedMatch.hasBadgeAlready && !orderedMatch.hasTrailingContent) {
@@ -155,7 +195,7 @@ internal object OrderedTextStyleSupport {
         return rebuiltText
     }
 
-    fun collectRuns(message: Text): List<StyledRun> {
+    fun collectRuns(message: FormattedText): List<StyledRun> {
         val styledRuns = mutableListOf<StyledRun>()
         var startIndex = 0
         message.visit({ style, segment ->

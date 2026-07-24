@@ -6,9 +6,38 @@ import net.minecraft.network.chat.Component
 import net.minecraft.ChatFormatting
 import java.util.Optional
 
+internal data class RankPrefixReplacement(
+    val before: String,
+    val replacement: String,
+    val copyName: Boolean,
+)
+
 internal object LegacyMinecraftTextStyler {
     private const val maximumTrackedPrefixLength = 96
     private val rankPrefixSuffixRegex = Regex("\\[[^\\]]+]\\s*$")
+
+    // Hypixel always prefixes ranked players with "[RANK] " immediately before the
+    // username. We only ever replace that exact trailing bracket + whitespace, so a
+    // player with no matching rank tag in front of their name is left untouched.
+    fun resolveRankPrefixReplacement(
+        beforeText: String,
+        customization: PlayerCustomizationRegistry.PlayerCustomization,
+    ): RankPrefixReplacement? {
+        val rankPrefix = customization.nameRankPrefix
+        if (!customization.hasRankPrefix || rankPrefix == null || beforeText.isEmpty()) {
+            return null
+        }
+
+        val match = rankPrefixSuffixRegex.find(beforeText) ?: return null
+        val matchedText = match.value
+        val bracketEnd = matchedText.indexOf(']') + 1
+        val trailingWhitespace = if (bracketEnd in 0..matchedText.length) matchedText.substring(bracketEnd) else ""
+        return RankPrefixReplacement(
+            before = beforeText.substring(0, match.range.first),
+            replacement = rankPrefix.text + trailingWhitespace,
+            copyName = rankPrefix.copyName(),
+        )
+    }
 
     fun rememberStyledSegment(recentSegments: ArrayDeque<StyledSegment>, segmentText: String, segmentStyle: Style) {
         if (segmentText.isEmpty()) {

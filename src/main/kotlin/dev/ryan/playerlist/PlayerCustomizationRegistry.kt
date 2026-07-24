@@ -28,6 +28,26 @@ object PlayerCustomizationRegistry {
         }
     }
 
+    data class NameRankPrefix(
+        val text: String,
+        val mode: Mode,
+        val colors: NameColors? = null,
+        val bold: Boolean = false,
+        val animationSpeed: Float? = null,
+        val animationSteps: Int? = null,
+    ) {
+        enum class Mode {
+            SOLID,
+            GRADIENT,
+            ANIMATED_GRADIENT,
+            COPY_NAME,
+        }
+
+        fun copyName(): Boolean = mode == Mode.COPY_NAME
+
+        fun animatedGradient(): Boolean = mode == Mode.ANIMATED_GRADIENT && colors != null && colors.left != colors.right
+    }
+
     data class PlayerCustomization(
         val username: String,
         val nickname: String? = null,
@@ -40,6 +60,7 @@ object PlayerCustomizationRegistry {
         val nameAnimationSteps: Int? = null,
         val nameBold: Boolean = false,
         val nameBadge: NameBadge? = null,
+        val nameRankPrefix: NameRankPrefix? = null,
         val capeResourcePath: String? = null,
         val capeUrl: String? = null,
         val scale: Float? = null,
@@ -48,10 +69,16 @@ object PlayerCustomizationRegistry {
         val scaleZ: Float? = null,
     ) {
         val explicitNameColors: Boolean = nameColors != null || !nameLetterColors.isNullOrEmpty()
-        val animatedGradient: Boolean = nameAnimated && nameColors?.let { it.left != it.right } == true
         val hasBadge: Boolean = nameBadge != null
+        val hasRankPrefix: Boolean = nameRankPrefix != null && nameRankPrefix.text.isNotBlank()
+        val animatedGradient: Boolean = run {
+            val nameAnimatedGradient = nameAnimated && nameColors?.let { it.left != it.right } == true
+            val rankAnimatedGradient = nameRankPrefix?.animatedGradient() == true
+            val copyNameAnimated = hasRankPrefix && nameRankPrefix?.copyName() == true && nameAnimatedGradient
+            nameAnimatedGradient || rankAnimatedGradient || copyNameAnimated
+        }
         val hasNickname: Boolean = !nickname.isNullOrBlank()
-        val hasDecorations: Boolean = explicitNameColors || nameBold || hasBadge
+        val hasDecorations: Boolean = explicitNameColors || nameBold || hasBadge || hasRankPrefix
 
         @Volatile
         var syncedUuid: UUID? = uuid
@@ -430,6 +457,7 @@ object PlayerCustomizationRegistry {
             nameAnimationSteps = overlay.nameAnimationSteps ?: nameAnimationSteps,
             nameBold = overlay.nameBold || nameBold,
             nameBadge = overlay.nameBadge ?: nameBadge,
+            nameRankPrefix = overlay.nameRankPrefix ?: nameRankPrefix,
             capeResourcePath = overlay.capeResourcePath ?: capeResourcePath,
             capeUrl = overlay.capeUrl ?: capeUrl,
             scale = overlay.scale ?: scale,
@@ -482,6 +510,7 @@ object PlayerCustomizationRegistry {
                 bold = it.bold,
             )
         }
+        val rankPrefix = toRankPrefix(entry.rankPrefix)
 
         return PlayerCustomization(
             username = normalizedUsername,
@@ -495,12 +524,41 @@ object PlayerCustomizationRegistry {
             nameAnimationSteps = entry.style?.animationSteps,
             nameBold = entry.style?.bold == true,
             nameBadge = badge,
+            nameRankPrefix = rankPrefix,
             capeResourcePath = entry.capeResourcePath,
             capeUrl = entry.capeUrl,
             scale = entry.scale,
             scaleX = entry.scaleX,
             scaleY = entry.scaleY,
             scaleZ = entry.scaleZ,
+        )
+    }
+
+    private fun toRankPrefix(entry: ContentManager.LoadedRankPrefix?): NameRankPrefix? {
+        if (entry == null) {
+            return null
+        }
+
+        val colors = if (entry.leftColor != null && entry.rightColor != null) {
+            NameColors(left = entry.leftColor, right = entry.rightColor, spacing = entry.gradientSpacing)
+        } else {
+            null
+        }
+
+        val mode = when (entry.mode) {
+            ContentManager.LoadedRankPrefix.Mode.SOLID -> NameRankPrefix.Mode.SOLID
+            ContentManager.LoadedRankPrefix.Mode.GRADIENT -> NameRankPrefix.Mode.GRADIENT
+            ContentManager.LoadedRankPrefix.Mode.ANIMATED_GRADIENT -> NameRankPrefix.Mode.ANIMATED_GRADIENT
+            ContentManager.LoadedRankPrefix.Mode.COPY_NAME -> NameRankPrefix.Mode.COPY_NAME
+        }
+
+        return NameRankPrefix(
+            text = entry.text,
+            mode = mode,
+            colors = if (mode == NameRankPrefix.Mode.COPY_NAME) null else colors,
+            bold = entry.bold,
+            animationSpeed = entry.animationSpeed,
+            animationSteps = entry.animationSteps,
         )
     }
 }
