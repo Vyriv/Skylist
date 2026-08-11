@@ -7,5 +7,5 @@ object PlayerListLinks {
     // Remaining dynamic API calls go through the Skylist-operated relay service because
     // the mod needs live scammer lookups, presence sync, and Hypixel-linked Discord reads.
     const val skylistApiBaseUrl = "https://plain-dawn-a5d2.ryaneagers2015.workers.dev"
-    const val skylistCosmeticsDataUrl = "$skylistApiBaseUrl/cosmetics/people"
+    const val skylistCosmeticsDataUrl = "https://api.vyriv.dev/v1/cosmetics"
 }

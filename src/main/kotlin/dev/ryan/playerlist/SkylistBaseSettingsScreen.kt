@@ -74,7 +74,7 @@ class SkylistBaseSettingsScreen(
         drawText(context, "Loaded scammers: ${ScammerListManager.listEntries().size}", panel.left + 34, panel.top + 156, theme.lightTextAccent)
         drawText(context, "Cosmetic entries: ${PlayerCustomizationRegistry.entries.size}", panel.left + 34, panel.top + 170, theme.lightTextAccent)
         drawText(context, "Last scammer refresh: ${formatRefreshTime()}", panel.left + 34, panel.top + 184, theme.subtleText)
-        drawText(context, "Cosmetics API: startup fetch via jsonhosting, worker-backed edits", panel.left + 34, panel.top + 198, theme.subtleText)
+        drawText(context, "Cosmetics API: startup fetch via Vyriv API", panel.left + 34, panel.top + 198, theme.subtleText)
 
         statusMessage?.let {
             drawCentered(context, it, panel.centerX(), panel.bottom - 48, statusColor)
