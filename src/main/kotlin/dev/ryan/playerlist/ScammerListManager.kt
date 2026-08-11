@@ -157,7 +157,7 @@ object ScammerListManager {
 
     private fun fetchAndCache(path: String): ScammerEntry? {
         val request = HttpRequest.newBuilder()
-            .uri(URI.create(SkylistApiClient.apiBaseUrl + path))
+            .uri(URI.create(PlayerListLinks.skylistScammerApiBaseUrl + path))
             .timeout(Duration.ofSeconds(10))
             .header("accept", "*/*")
             .GET()
