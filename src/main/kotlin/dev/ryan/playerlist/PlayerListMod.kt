@@ -15,7 +15,6 @@ class PlayerListMod : ClientModInitializer {
         CapeTextureManager.initialize()
         PlayerCustomizationRegistry.initialize()
         ContentManager.fetchRemotePeopleOnStartup()
-        SkylistPresenceManager.initialize()
 
         PlayerListGuiLauncher.register()
         PlayerListKeybinds.register()

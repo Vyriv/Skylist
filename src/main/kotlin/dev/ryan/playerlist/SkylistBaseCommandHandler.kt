@@ -116,7 +116,6 @@ object SkylistBaseCommandHandler {
             )
             .then(literal("togglecapes").executes(::toggleCustomCapes))
             .then(literal("togglescaler").executes(::toggleCustomScaler))
-            .then(literal("toggleidentifier").executes(::toggleIdentifier))
 
     private fun printHelp(context: CommandContext<FabricClientCommandSource>): Int {
         val source = context.source
@@ -132,7 +131,6 @@ object SkylistBaseCommandHandler {
         source.sendFeedback(helpLine("dev", "get", "discord", "<username>"))
         source.sendFeedback(helpLine("dev", "togglecapes"))
         source.sendFeedback(helpLine("dev", "togglescaler"))
-        source.sendFeedback(helpLine("dev", "toggleidentifier"))
         source.sendFeedback(helpLine("updatecosmetics"))
         source.sendFeedback(helpLine("help"))
         return Command.SINGLE_SUCCESS
@@ -318,26 +316,6 @@ object SkylistBaseCommandHandler {
         return Command.SINGLE_SUCCESS
     }
 
-    private fun toggleIdentifier(context: CommandContext<FabricClientCommandSource>): Int {
-        val source = context.source
-        if (!isOwner(source)) {
-            source.sendError(tlMessage("This command is developer only >:("))
-            return 0
-        }
-
-        val enabled = SkylistPresenceManager.toggleIdentifierEnabled()
-        if (enabled) {
-            SkylistPresenceManager.refreshAsync()
-        }
-        source.sendFeedback(
-            tlMessage(
-                Component.literal("Developer identifiers are now ").formatted(ChatFormatting.GREEN)
-                    .append(Component.literal(if (enabled) "ENABLED" else "DISABLED").formatted(if (enabled) ChatFormatting.GREEN else ChatFormatting.RED)),
-            ),
-        )
-        return Command.SINGLE_SUCCESS
-    }
-
     fun refreshCosmetics(): java.util.concurrent.CompletableFuture<Unit> =
         ContentManager.refreshRemotePeopleNow(logPrefix = "command")
 
@@ -450,7 +428,6 @@ object SkylistBaseCommandHandler {
                         segment.equals("discord", ignoreCase = true) -> ChatFormatting.AQUA
                         segment.equals("togglecapes", ignoreCase = true) -> ChatFormatting.YELLOW
                         segment.equals("togglescaler", ignoreCase = true) -> ChatFormatting.YELLOW
-                        segment.equals("toggleidentifier", ignoreCase = true) -> ChatFormatting.YELLOW
                         segment.equals("updatecosmetics", ignoreCase = true) -> ChatFormatting.GREEN
                         segment.equals("true/false", ignoreCase = true) -> ChatFormatting.GRAY
                         segment.startsWith("<") && segment.endsWith(">") -> ChatFormatting.GRAY

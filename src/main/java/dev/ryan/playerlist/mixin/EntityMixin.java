@@ -1,9 +1,7 @@
 package dev.ryan.playerlist.mixin;
 
 import dev.ryan.playerlist.NameStyler;
-import dev.ryan.playerlist.SkylistPresenceManager;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -31,9 +29,6 @@ public abstract class EntityMixin {
         }
 
         Component styled = NameStyler.INSTANCE.applyNameplateDecorations(current);
-        if ((Object) this instanceof Player player) {
-            styled = SkylistPresenceManager.INSTANCE.applyIdentifier(styled, player.getGameProfile());
-        }
         if (styled != current) {
             cir.setReturnValue(styled);
         }

@@ -12,7 +12,6 @@ data class SettingsConfig(
     var assumePartyLeader: Boolean = false,
     var customCapesDisabled: Boolean = false,
     var customScalerDisabled: Boolean = false,
-    var developerIdentifierEnabled: Boolean = false,
     var hypixelApiKey: String? = null,
     var uiTheme: String? = "ocean",
     var remoteScammerChecksEnabled: Boolean? = true,

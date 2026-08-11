@@ -34,22 +34,4 @@ object SkylistApiClient {
             else -> throw IOException("Unexpected response ${response.statusCode()} from ${request.uri()}")
         }
     }
-
-    fun postJson(path: String, body: String, timeoutSeconds: Long = 8): JsonObject? {
-        // POST is used only for the small voluntary Skylist presence payload.
-        val request = HttpRequest.newBuilder()
-            .uri(URI.create(apiBaseUrl + path))
-            .timeout(Duration.ofSeconds(timeoutSeconds))
-            .header("accept", "application/json,*/*")
-            .header("content-type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build()
-
-        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-        return when (response.statusCode()) {
-            in 200..299 -> JsonParser.parseString(response.body()).asJsonObject
-            204, 404 -> null
-            else -> throw IOException("Unexpected response ${response.statusCode()} from ${request.uri()}")
-        }
-    }
 }

@@ -206,16 +206,6 @@ object ConfigManager {
     }
 
     @Synchronized
-    fun isDeveloperIdentifierEnabled(): Boolean = settings.developerIdentifierEnabled
-
-    @Synchronized
-    fun toggleDeveloperIdentifierEnabled(): Boolean {
-        settings.developerIdentifierEnabled = !settings.developerIdentifierEnabled
-        save()
-        return settings.developerIdentifierEnabled
-    }
-
-    @Synchronized
     fun getHypixelApiKey(): String? = settings.hypixelApiKey?.takeIf { it.isNotBlank() }
 
     @Synchronized

@@ -1,7 +1,6 @@
 package dev.ryan.playerlist.mixin;
 
 import dev.ryan.playerlist.NameStyler;
-import dev.ryan.playerlist.SkylistPresenceManager;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
@@ -27,9 +26,8 @@ public abstract class SkyHanniAdvancedPlayerListMixin {
         }
 
         Component styled = NameStyler.INSTANCE.applyNameplateDisplayDecorations(current);
-        Component identified = SkylistPresenceManager.INSTANCE.applyIdentifier(styled, current.getString());
-        if (identified != current) {
-            args.set(2, identified);
+        if (styled != current) {
+            args.set(2, styled);
         }
     }
 }

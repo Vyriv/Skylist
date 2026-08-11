@@ -1,7 +1,6 @@
 package dev.ryan.playerlist.mixin;
 
 import dev.ryan.playerlist.NameStyler;
-import dev.ryan.playerlist.SkylistPresenceManager;
 import net.minecraft.client.gui.components.PlayerTabOverlay;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
@@ -23,9 +22,8 @@ public abstract class PlayerListHudMixin {
         }
 
         Component styled = NameStyler.INSTANCE.applyNameplateDisplayDecorations(current);
-        Component identified = SkylistPresenceManager.INSTANCE.applyIdentifier(styled, entry.getProfile());
-        if (identified != current) {
-            cir.setReturnValue(identified);
+        if (styled != current) {
+            cir.setReturnValue(styled);
         }
     }
 

@@ -3,7 +3,6 @@ package dev.ryan.playerlist.mixin;
 import com.mojang.authlib.GameProfile;
 import dev.ryan.playerlist.NameStyler;
 import dev.ryan.playerlist.OwnerCape;
-import dev.ryan.playerlist.SkylistPresenceManager;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.world.entity.player.PlayerSkin;
 import net.minecraft.network.chat.Component;
@@ -31,9 +30,8 @@ public abstract class PlayerListEntryMixin {
         }
 
         Component styled = NameStyler.INSTANCE.applyNameplateDisplayDecorations(current);
-        Component identified = SkylistPresenceManager.INSTANCE.applyIdentifier(styled, this.profile);
-        if (identified != current) {
-            cir.setReturnValue(identified);
+        if (styled != current) {
+            cir.setReturnValue(styled);
         }
     }
 
@@ -50,7 +48,6 @@ public abstract class PlayerListEntryMixin {
         if (NameStyler.INSTANCE.hasDisplayProfile(this.profile)) {
             current = NameStyler.INSTANCE.applyNameplateDisplayDecorations(current);
         }
-        current = SkylistPresenceManager.INSTANCE.applyIdentifier(current, this.profile);
         if (current == text) {
             return;
         }
