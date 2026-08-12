@@ -5,7 +5,13 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.Mutable;
 
+// DisplayEntry lives on Hud (not Gui) from 26.2 onward - see InGameHudMixin.
+//? if <26.2 {
 @Mixin(targets = "net.minecraft.client.gui.Gui$1DisplayEntry")
+//?}
+//? if >=26.2 {
+/*@Mixin(targets = "net.minecraft.client.gui.Hud$1DisplayEntry")
+*///?}
 public interface InGameHudSidebarEntryAccessor {
     @Accessor("name")
     Component playerlist$getName();

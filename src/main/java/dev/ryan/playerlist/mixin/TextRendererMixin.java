@@ -52,6 +52,13 @@ public abstract class TextRendererMixin {
         }
     }
 
+    // Font.drawInBatch*/drawInBatch8xOutline were removed in 26.2 - all Font drawing there goes
+    // through Font.prepareText()/prepare8xTextOutline() consumed by RenderState classes instead.
+    // On 26.2, on-screen text gradient decoration happens exclusively via
+    // TextGuiElementRenderStateMixin (GuiTextRenderState.ensurePrepared() is the sole GUI text
+    // entry point there). The 8x-outline path below (world-space text, e.g. entity text/nametags)
+    // has no confirmed 26.2 replacement yet - outlined-text gradients are a known gap on 26.2.
+    //? if <26.2 {
     @ModifyVariable(
         method = "drawInBatch(Ljava/lang/String;FFIZLorg/joml/Matrix4fc;Lnet/minecraft/client/renderer/MultiBufferSource;Lnet/minecraft/client/gui/Font$DisplayMode;II)V",
         at = @At("HEAD"),
@@ -130,6 +137,7 @@ public abstract class TextRendererMixin {
         );
         return styled;
     }
+    //?}
 
     @ModifyVariable(
         method = "width(Ljava/lang/String;)I",

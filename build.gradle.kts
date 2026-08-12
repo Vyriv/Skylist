@@ -1,123 +1,90 @@
-import net.fabricmc.loom.api.LoomGradleExtensionAPI
-import net.fabricmc.loom.task.RemapJarTask
-import org.gradle.api.plugins.BasePluginExtension
-import org.gradle.api.plugins.JavaPluginExtension
-import org.gradle.api.tasks.SourceSetContainer
-import org.gradle.api.tasks.bundling.Jar
-import org.gradle.api.tasks.compile.JavaCompile
-import org.gradle.language.jvm.tasks.ProcessResources
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
-import java.util.Properties
 
 plugins {
-    base
-    id("net.fabricmc.fabric-loom") version "1.17.13" apply false
-    kotlin("jvm") version "2.4.0" apply false
+    // Picks obfuscated-mappings Loom or Mojang-mapped Loom automatically per targeted version.
+    id("dev.kikugie.loom-back-compat")
+    kotlin("jvm") version "2.4.0"
 }
 
-val releasesDir = rootDir.resolve("build")
-val rootResourcesDir = rootDir.resolve("resources")
-val sharedResourcesDir = rootDir.resolve("Shared resources")
-val sharedMainDir = rootDir.resolve("src/main")
+// DO NOT set group = ...! loom-back-compat manages it.
+version = "${property("mod.version")}-${sc.current.version}"
+base.archivesName.set(property("mod.id") as String)
 
-fun loadTargetProperties(projectDir: File): Properties {
-    val properties = Properties()
-    projectDir.resolve("version.properties").inputStream().use(properties::load)
-    return properties
+repositories {
+    maven("https://maven.fabricmc.net/")
+    maven("https://maven.terraformersmc.com/releases/") { name = "TerraformersMC" }
+    mavenCentral()
 }
 
-configure(
-    listOf(
-        project(":versions:mc2612"),
-    ),
-) {
-    apply(plugin = "base")
-    apply(plugin = "fabric-loom")
-    apply(plugin = "org.jetbrains.kotlin.jvm")
+dependencies {
+    minecraft("com.mojang:minecraft:${sc.current.version}")
+    // No-op on already-unobfuscated versions (26.1+); resolves+applies Mojang mappings on older,
+    // obfuscated ones. This is the "adapt mappings automatically per version" mechanism.
+    loomx.applyMojangMappings()
 
-    val targetProperties = loadTargetProperties(projectDir)
+    modImplementation("net.fabricmc:fabric-loader:${property("deps.fabric_loader")}")
+    modImplementation("net.fabricmc.fabric-api:fabric-api:${sc.properties["deps.fabric_api"] as String}")
+    modImplementation("net.fabricmc:fabric-language-kotlin:${property("deps.fabric_kotlin")}")
 
-    group = targetProperties.getProperty("maven_group")
-    version = targetProperties.getProperty("mod_version")
+    // Optional integration: compiled against, never required at runtime - Skylist works fine
+    // without ModMenu installed. modLocalRuntime pulls it into `runClient` only, not the shipped jar.
+    modCompileOnly("com.terraformersmc:modmenu:${property("deps.modmenu")}")
+    modLocalRuntime("com.terraformersmc:modmenu:${property("deps.modmenu")}")
+}
 
-    extensions.configure<BasePluginExtension> {
-        archivesName.set(targetProperties.getProperty("archives_base_name"))
+extensions.configure<KotlinJvmProjectExtension> {
+    jvmToolchain(25)
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(25)
+}
+
+loom {
+    runConfigs.all {
+        runDirectory = rootProject.file("run") // shared between versions
     }
+}
 
-    repositories {
-        maven("https://maven.fabricmc.net/")
-        mavenCentral()
+tasks.processResources {
+    val modId = project.property("mod.id") as String
+    val modName = project.property("mod.name") as String
+    val modVersion = project.version.toString()
+    val minecraftCompat = sc.properties["mod.mc_compat"] as String
+
+    inputs.property("id", modId)
+    inputs.property("name", modName)
+    inputs.property("version", modVersion)
+    inputs.property("minecraft_compat", minecraftCompat)
+
+    filesMatching("fabric.mod.json") {
+        expand(
+            mapOf(
+                "id" to modId,
+                "name" to modName,
+                "version" to modVersion,
+                "minecraft" to minecraftCompat,
+            ),
+        )
     }
+}
 
-    val loom = extensions.getByType<LoomGradleExtensionAPI>()
-    loom.noIntermediateMappings()
+val releasesDir = rootProject.rootDir.resolve("build")
 
-    dependencies {
-        add("minecraft", "com.mojang:minecraft:${targetProperties.getProperty("minecraft_version")}")
-        add("mappings", "net.fabricmc:intermediary:${targetProperties.getProperty("intermediary_version")}:v2")
-        add("implementation", "net.fabricmc:fabric-loader:${targetProperties.getProperty("loader_version")}")
-        add("implementation", "net.fabricmc.fabric-api:fabric-api:${targetProperties.getProperty("fabric_version")}")
-        add("implementation", "net.fabricmc:fabric-language-kotlin:${targetProperties.getProperty("fabric_kotlin_version")}")
-        add("compileOnly", "net.fabricmc:sponge-mixin:0.17.3+mixin.0.8.7")
-        add("runtimeOnly", "org.ow2.asm:asm:9.10.1")
-        add("runtimeOnly", "org.ow2.asm:asm-analysis:9.10.1")
-        add("runtimeOnly", "org.ow2.asm:asm-commons:9.10.1")
-        add("runtimeOnly", "org.ow2.asm:asm-tree:9.10.1")
-        add("runtimeOnly", "org.ow2.asm:asm-util:9.10.1")
+tasks.jar {
+    from(rootProject.file("LICENSE")) {
+        rename { "${it}_${base.archivesName.get()}" }
     }
+}
 
-    extensions.configure<SourceSetContainer> {
-        named("main") {
-            java.srcDir(sharedMainDir.resolve("java"))
-            java.srcDir(projectDir.resolve("java"))
-
-            resources.srcDir(sharedMainDir.resolve("resources"))
-            resources.srcDir(projectDir.resolve("resources"))
-            resources.srcDir(rootResourcesDir)
-            resources.srcDir(sharedResourcesDir)
-        }
-    }
-
-    extensions.configure<KotlinJvmProjectExtension> {
-        jvmToolchain(25)
-        sourceSets.named("main") {
-            kotlin.srcDir(sharedMainDir.resolve("kotlin"))
-            kotlin.srcDir(projectDir.resolve("kotlin"))
-        }
-    }
-
-    extensions.configure<JavaPluginExtension> {
-        sourceCompatibility = JavaVersion.VERSION_25
-        targetCompatibility = JavaVersion.VERSION_25
-    }
-
-    tasks.named<ProcessResources>("processResources") {
-        inputs.property("version", project.version)
-        inputs.property("minecraft_version", targetProperties.getProperty("minecraft_version"))
-
-        filesMatching("fabric.mod.json") {
-            expand(
-                mapOf(
-                    "version" to project.version,
-                    "minecraft_version" to targetProperties.getProperty("minecraft_version"),
-                ),
-            )
-        }
-    }
-
-    tasks.withType<JavaCompile>().configureEach {
-        options.release.set(25)
-    }
-
-    tasks.named<Jar>("jar") {
-        val archivesName = project.extensions.getByType<BasePluginExtension>().archivesName
-        destinationDirectory.set(releasesDir)
-        from(rootProject.file("LICENSE")) {
-            rename { "${it}_${archivesName.get()}" }
-        }
-    }
-
-    tasks.named<RemapJarTask>("remapJar") {
-        destinationDirectory.set(releasesDir)
-    }
+// loomx.modJar resolves to whichever task actually produces the final mod jar for this version's
+// variant (remapped or not) - safer than guessing a task name like "remapJar" that may not exist
+// on every mapping path.
+loomx.modJar {
+    destinationDirectory.set(releasesDir)
 }
