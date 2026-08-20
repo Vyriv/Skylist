@@ -1,0 +1,26 @@
+# Centralized per-version properties. Top-level keys are defaults shared by every version;
+# a `[version]` table below overrides/adds keys for that Minecraft version only.
+# See https://stonecutter.kikugie.dev/wiki/config/properties#centralized-properties
+mod.id = "skylist"
+mod.name = "Skylist"
+mod.group = "dev.ryan"
+mod.version = "1.0.6"
+
+# Shared across every target - only override per-version below if a version genuinely needs a
+# different loader/toolchain build.
+deps.fabric_loader = "0.19.3"
+deps.fabric_kotlin = "1.13.12+kotlin.2.4.0"
+# ModMenu no longer ties releases to a specific Minecraft version - one release covers both targets.
+deps.modmenu = "20.0.1"
+loomx.loom_version = "1.17.13"
+
+["26.1.2"]
+# Fabric version-range predicate written into fabric.mod.json's "minecraft" depends entry.
+mod.mc_compat = "~26.1.2"
+deps.fabric_api = "0.154.0+26.1.2"
+
+["26.2"]
+mod.mc_compat = "~26.2"
+# 26.2 is still in active development upstream - re-check this against the Fabric API releases
+# page before shipping a build against it.
+deps.fabric_api = "0.156.0+26.2"

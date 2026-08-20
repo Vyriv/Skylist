@@ -1,7 +1,12 @@
 package dev.ryan.playerlist.mixin;
 
 import dev.ryan.playerlist.NameStyler;
+//? if <26.2 {
 import net.minecraft.client.gui.Gui;
+//?}
+//? if >=26.2 {
+/*import net.minecraft.client.gui.Hud;
+*///?}
 import net.minecraft.world.scores.PlayerScoreEntry;
 import net.minecraft.world.scores.Scoreboard;
 import net.minecraft.network.chat.numbers.NumberFormat;
@@ -12,13 +17,29 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+// The scoreboard sidebar (displayScoreboardSidebar + its DisplayEntry record) moved from Gui to a
+// new Hud class in 26.2 - Gui itself became screen/overlay management only (see Minecraft26Compat.kt).
+//? if <26.2 {
 @Mixin(Gui.class)
+//?}
+//? if >=26.2 {
+/*@Mixin(Hud.class)
+*///?}
 public abstract class InGameHudMixin {
+    //? if <26.2 {
     @Inject(
         method = "lambda$displayScoreboardSidebar$1(Lnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/network/chat/numbers/NumberFormat;Lnet/minecraft/world/scores/PlayerScoreEntry;)Lnet/minecraft/client/gui/Gui$1DisplayEntry;",
         at = @At("RETURN"),
         cancellable = true
     )
+    //?}
+    //? if >=26.2 {
+    /*@Inject(
+        method = "lambda$displayScoreboardSidebar$1(Lnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/network/chat/numbers/NumberFormat;Lnet/minecraft/world/scores/PlayerScoreEntry;)Lnet/minecraft/client/gui/Hud$1DisplayEntry;",
+        at = @At("RETURN"),
+        cancellable = true
+    )
+    *///?}
     private void playerlist$decorateSidebarEntry(
         Scoreboard scoreboard,
         NumberFormat numberFormat,
