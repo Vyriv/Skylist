@@ -1,4 +1,4 @@
-[![VyAddons](https://img.shields.io/discord/1487928162636533871?label=VyAddons&logo=discord&color=5865F2&logoColor=white)](https://discord.gg/WrKD6wTQYC)
+[![Join the Discord](https://img.shields.io/discord/1487928162636533871?label=Join%20the%20Discord&logo=discord&color=5865F2&logoColor=white)](https://discord.gg/R5NdTVRDpb)
 
 # **Skylist**
 
@@ -31,7 +31,7 @@ It scans players in real time during trades, party joins, and other interactions
 
 ## **Commands**
 
-* `/skylist` — Open main menu
+* `/skylist` â€” Open main menu
 
 ## **Dependencies**
 
